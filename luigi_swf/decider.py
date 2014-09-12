@@ -1,0 +1,313 @@
+from collections import Counter
+import cPickle as pickle
+import datetime
+import json
+import logging
+import os
+import os.path
+import pprint
+import signal
+from subprocess import call
+import sys
+from time import sleep
+import traceback
+
+import boto.swf.layer2 as swf
+import daemon
+import luigi.configuration
+from six import iteritems
+
+from .util import default_log_format, dthandler, kill_from_pid_file, \
+    SingleWaitingLockPidFile
+
+
+logger = logging.getLogger(__name__)
+pp = pprint.PrettyPrinter(indent=2)
+
+
+attrTaskScheduled = 'activityTaskScheduledEventAttributes'
+attrTaskCompleted = 'activityTaskCompletedEventAttributes'
+attrTaskFailed = 'activityTaskFailedEventAttributes'
+attrTaskTimedOut = 'activityTaskTimedOutEventAttributes'
+attrTaskCancReq = 'activityTaskCancelRequestedEventAttributes'
+attrTaskCanceled = 'activityTaskCanceledEventAttributes'
+
+seconds = 1.
+
+
+class LuigiSwfDecider(swf.Decider):
+
+    def run(self):
+        decision_task = self.poll()
+        decisions = swf.Layer1Decisions()
+        try:
+            if 'events' not in decision_task:
+                logger.debug('LuigiSwfDecider().run(), poll timed out')
+                return
+            events = self._get_events(decision_task)
+            state = self._get_state(events)
+            if not state['wf_cancel_req']:
+                version = self._get_version(events)
+                self._schedule_activities(state, decisions, version)
+            else:
+                self._cancel_activities(state, decisions)
+            self.complete(decisions=decisions)
+        except Exception, error:
+            tb = traceback.format_exc()
+            reason = ('Decider failed:\n' + str(error))[:255]
+            details = (tb + '\n' + str(error))[:32767]
+            logger.error('LuigiSwfDecider().run(), decider failed:\n%s',
+                         details)
+            decisions.fail_workflow_execution(reason=reason, details=details)
+            self.complete(decisions=decisions)
+            raise
+
+    def _get_events(self, decision_task):
+        # It's paginated.
+        events = decision_task['events']
+        while 'nextPageToken' in decision_task:
+            next_page_token = decision_task['nextPageToken']
+            decision_task = self.poll(next_page_token=next_page_token)
+            if 'events' in decision_task:
+                events += decision_task['events']
+        return events
+
+    def _get_all_tasks(self, events):
+        wf_event = next(e for e in events
+                        if e['eventType'] == 'WorkflowExecutionStarted')
+        wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
+        all_tasks = pickle.loads(str(wf_event_attr['input']))
+        logger.debug('LuigiSwfDecider()._get_all_tasks(), all_tasks:\n%s',
+                     pp.pformat(all_tasks))
+        return all_tasks
+
+    def _get_version(self, events):
+        wf_event = next(e for e in events
+                        if e['eventType'] == 'WorkflowExecutionStarted')
+        wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
+        return wf_event_attr['workflowType']['version']
+
+    def _get_task_id(self, events, event_attributes):
+        event_id = event_attributes['scheduledEventId'] - 1
+        activity = events[event_id]
+        attributes = activity['activityTaskScheduledEventAttributes']
+        return attributes['activityId']
+
+    def _get_runnables(self, all_tasks, completed, running):
+        """
+        >>> all_tasks = {
+        ...     'Task1': {'deps': ['Task3']},
+        ...     'Task2': {'deps': ['Task3']},
+        ...     'Task3': {'deps': []},
+        ...     'Task4': {'deps': []},
+        ... }
+        >>> completed = ['Task3']
+        >>> running = ['Task4']
+        >>> decider = LuigiSwfDecider()
+        >>> list(decider._get_runnables(all_tasks, completed, running))
+        [('Task1', {'deps': ['Task3']}), ('Task2', {'deps': ['Task3']})]
+        >>> completed = ['Task1']
+        >>> list(decider._get_runnables(all_tasks, completed))
+        [('Task3', {'deps': []})]
+        """
+        for task_id, task in iteritems(all_tasks):
+            if task_id not in completed and task_id not in running and \
+                    all(d in completed for d in task['deps']):
+                yield task_id, task
+
+    def _get_unretryables(self, all_tasks, failed):
+        for task_id, count in iteritems(failed):
+            if count > all_tasks[task_id]['retries']:
+                yield task_id
+
+    def _get_completed_wrappers(self, all_tasks, completed_activities):
+        # Iterate so wrappers can depend on one another.
+        completed_wrappers = []
+        while True:
+            completed = completed_activities + completed_wrappers
+            new_comp = [task_id
+                        for task_id, task in iteritems(all_tasks)
+                        if (task['is_wrapper']
+                            and task_id not in completed
+                            and all(t in completed for t in task['deps']))]
+            if len(new_comp) == 0:
+                break
+            completed_wrappers += new_comp
+        return completed_wrappers
+
+    def _get_state(self, events):
+        all_tasks = self._get_all_tasks(events)
+        state = dict()
+        state['all_schedulings'] = \
+            [e[attrTaskScheduled]['activityId']
+             for e in events
+             if e['eventType'] == 'ActivityTaskScheduled']
+        state['schedulings'] = Counter(state['all_schedulings'])
+        state['compl_act'] = [self._get_task_id(events, e[attrTaskCompleted])
+                              for e in events
+                              if e['eventType'] == 'ActivityTaskCompleted']
+        state['compl_w'] = self._get_completed_wrappers(all_tasks,
+                                                        state['compl_act'])
+        state['completed'] = state['compl_act'] + state['compl_w']
+        failures_flat = [self._get_task_id(events, e[attrTaskFailed])
+                         for e in events
+                         if e['eventType'] == 'ActivityTaskFailed']
+        state['failures'] = Counter(failures_flat)
+        timeouts_flat = [self._get_task_id(events, e[attrTaskTimedOut])
+                         for e in events
+                         if e['eventType'] == 'ActivityTaskTimedOut']
+        state['timeouts'] = Counter(timeouts_flat)
+        state['wf_cancel_req'] = any(e for e in events
+                                     if e['eventType'] == ('WorkflowExecution'
+                                                           'CancelRequested'))
+        state['cancel_requests'] = [e[attrTaskCancReq]['activityId']
+                                    for e in events
+                                    if e['eventType'] == ('ActivityTask'
+                                                          'CancelRequested')]
+        act_cancels = [self._get_task_id(events,
+                                         e[attrTaskCanceled])
+                       for e in events
+                       if e['eventType'] == ('ActivityTask'
+                                             'Canceled')]
+        state['cancellations'] = Counter(act_cancels)
+        state['running'] = \
+            [task_id
+             for task_id, sched_count
+             in iteritems(state['schedulings'])
+             if (task_id not in state['completed'] and
+                 sched_count > (state['failures'][task_id]
+                                + state['timeouts'][task_id]
+                                + state['cancellations'][task_id]))]
+        state['runnables'] = list(self._get_runnables(all_tasks,
+                                                      state['completed'],
+                                                      state['running']))
+        state['unretryables'] = list(self._get_unretryables(all_tasks,
+                                                            state['failures']))
+        logger.debug('LuigiSwfDecider().get_state(), state:\n%s',
+                     pp.pformat(state))
+        return state
+
+    def _schedule_activities(self, state, decisions, version):
+        scheduled_count = 0
+        for task_id, task in state['runnables']:
+            if task_id in state['unretryables']:
+                continue
+            scheduled_count += 1
+            start_to_close = task['start_to_close_timeout']
+            schedule_to_close = task['schedule_to_close_timeout']
+            decisions.schedule_activity_task(
+                activity_id=task_id,
+                activity_type_name=task['task_family'],
+                activity_type_version=version,
+                task_list=task['task_list'],
+                heartbeat_timeout=str(task['heartbeat_timeout']),
+                start_to_close_timeout=str(start_to_close),
+                schedule_to_close_timeout=str(schedule_to_close),
+                input=json.dumps(task, dthandler))
+            logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
+        if scheduled_count == 0 and len(state['running']) == 0:
+            if len(state['unretryables']) > 0:
+                msg = 'Task(s) failed: ' + ', '.join(state['unretryables'])
+                logger.error('LuigiSwfDecider().run(), '
+                             'failing execution: %s', msg)
+                decisions.fail_workflow_execution(reason=msg[:255],
+                                                  details=msg[:32767])
+            else:
+                logger.debug('LuigiSwfDecider().run(), '
+                             'completing workflow')
+                decisions.complete_workflow_execution()
+
+    def _cancel_activities(self, state, decisions):
+        if len(state['running']) > 0:
+            for task_id in state['running']:
+                if task_id not in state['cancel_requests']:
+                    decisions.request_cancel_activity_task(task_id)
+        else:
+            decisions.cancel_workflow_executions()
+
+
+class DeciderServer(object):
+    """
+    Shut down with SIGWINCH because SIGTERM kills subprocesses even if we
+    handle it with the signal map.
+    """
+
+    got_term_signal = False
+
+    def __init__(self, stdout=None, stderr=None, logfilename=None,
+                 loglevel=logging.INFO, logformat=default_log_format,
+                 **kwargs):
+        logger.debug('DeciderServer.__init__(...)')
+        config = luigi.configuration.get_config()
+        if stdout is None:
+            stdout_path = config.get('swfscheduler', 'decider-log-out')
+            self.stdout = open(stdout_path, 'a')
+        else:
+            self.stdout = stdout
+        if stderr is None:
+            stderr_path = config.get('swfscheduler', 'decider-log-err')
+            self.stderr = open(stderr_path, 'a')
+        else:
+            self.stderr = stderr
+        if logfilename is not None:
+            self.logfilename = logfilename
+        else:
+            self.logfilename = config.get('swfscheduler', 'decider-log')
+        self.loglevel = loglevel
+        self.logformat = logformat
+        if 'domain' not in kwargs:
+            kwargs['domain'] = config.get('swfscheduler', 'domain')
+        if 'task_list' not in kwargs:
+            kwargs['task_list'] = 'luigi'
+        if 'aws_access_key_id' not in kwargs or \
+                'aws_secret_access_key' not in kwargs:
+            access_key = config.get('swfscheduler', 'aws_access_key_id', None)
+            secret_key = config.get('swfscheduler', 'aws_secret_access_key',
+                                    None)
+            if access_key is not None and secret_key is not None:
+                kwargs['aws_access_key_id'] = access_key
+                kwargs['aws_secret_access_key'] = secret_key
+        self.kwargs = kwargs
+
+    def _pid_file(self):
+        config = luigi.configuration.get_config()
+        pid_dir = config.get('swfscheduler', 'decider-pid-file-dir')
+        call(['mkdir', '-p', pid_dir])
+        return os.path.join(pid_dir, 'swfdecider.pid')
+
+    def _handle_term(self, s, f):
+        logger.debug('DeciderServer()._handle_term()')
+        self.got_term_signal = True
+
+    def start(self):
+        logstream = open(self.logfilename, 'a')
+        logging.basicConfig(stream=logstream, level=self.loglevel,
+                            format=self.logformat)
+        config = luigi.configuration.get_config()
+        waitconf = 'decider-pid-file-wait-sec'
+        pid_wait = float(config.get('swfscheduler', waitconf, 10. * seconds))
+        context = daemon.DaemonContext(
+            pidfile=SingleWaitingLockPidFile(self._pid_file(), pid_wait),
+            stdout=self.stdout,
+            stderr=self.stderr,
+            signal_map={
+                signal.SIGWINCH: self._handle_term,
+                signal.SIGTERM: 'terminate',
+                signal.SIGHUP: 'terminate',
+            },
+            files_preserve=[logstream],
+        )
+        with context:
+            decider = LuigiSwfDecider(**self.kwargs)
+            while not self.got_term_signal:
+                try:
+                    logger.debug('DeciderServer().start(), decider.run()')
+                    decider.run()
+                except Exception as ex:
+                    tb = traceback.format_exc()
+                    logger.error('DeciderServer().start(), error:\n%s', tb)
+                sleep(0.001 * seconds)
+
+    def stop(self):
+        kill_from_pid_file(self._pid_file() + '-waiting', signal.SIGHUP)
+        kill_from_pid_file(self._pid_file(), signal.SIGWINCH)
