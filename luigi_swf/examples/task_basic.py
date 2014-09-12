@@ -26,7 +26,7 @@ class DemoBasicTask(luigi.Task):
     dt = luigi.DateParameter()
 
     # Default values
-    swf_task_list = 'workflow'
+    swf_task_list = 'default'
     swf_retries = 0
     swf_start_to_close_timeout = None  # in seconds
     swf_heartbeat_timeout = None  # in seconds
@@ -53,7 +53,7 @@ class DemoBasicWorkflow(luigi.WrapperTask):
 
 if __name__ == '__main__':
     task = DemoBasicWorkflow(dt=datetime.datetime(2000, 1, 1))
-    domain = 'dmp_staging'
+    domain = 'test_domain'
     version = 'unspecified'
     ex = LuigiSwfExecutor(domain, version, task)
     ex.register()

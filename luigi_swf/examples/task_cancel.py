@@ -28,7 +28,7 @@ class DemoCancelTask(luigi.Task, SwfHeartbeatCancel):
     # Workaround for when the task is in the same file you're executing
     __module__ = 'luigi_swf.examples.task_cancel'
 
-    swf_task_list = 'workflow'
+    swf_task_list = 'default'
 
     def output(self):
         path = os.path.expanduser('~/luigi-swf-demo-cancel-complete')
@@ -61,7 +61,7 @@ class DemoCancelWorkflow(luigi.WrapperTask):
 
 if __name__ == '__main__':
     task = DemoCancelWorkflow()
-    domain = 'dmp_staging'
+    domain = 'test_domain'
     version = 'unspecified'
     ex = LuigiSwfExecutor(domain, version, task)
     ex.register()
