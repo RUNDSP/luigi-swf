@@ -1,3 +1,4 @@
+arrow
 boto
 pidfile
 python-daemon
