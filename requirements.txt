@@ -1,0 +1,4 @@
+boto
+pidfile
+python-daemon
+six
