@@ -84,7 +84,7 @@ class WorkerServer(object):
     handle it with the signal map.
     """
 
-    got_term_signal = False
+    _got_term_signal = False
 
     def __init__(self, worker_idx, stdout=None, stderr=None, logfilename=None,
                  loglevel=logging.INFO, logformat=default_log_format,
@@ -133,7 +133,7 @@ class WorkerServer(object):
 
     def _handle_term(self, s, f):
         logger.debug('WorkerServer()._handle_term()')
-        self.got_term_signal = True
+        self._got_term_signal = True
 
     def start(self):
         logstream = open(self.logfilename, 'a')
@@ -155,7 +155,7 @@ class WorkerServer(object):
         )
         with context:
             worker = LuigiSwfWorker(**self.kwargs)
-            while not self.got_term_signal:
+            while not self._got_term_signal:
                 try:
                     worker.run(self.identity)
                 except Exception as ex:

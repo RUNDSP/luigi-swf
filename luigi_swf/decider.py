@@ -45,7 +45,7 @@ class LuigiSwfDecider(swf.Decider):
         """Poll for and run an activity
 
         This should be run in a loop. It will poll for up to 60 seconds. After
-        60 seconds, it will return without running any activity tasks. The user
+        60 seconds, it will return without running any decision tasks. The user
         should usually not need to interact with this class directly. Instead,
         :class:`DeciderServer` can be used to run the loop.
 
@@ -262,7 +262,7 @@ class DeciderServer(object):
     :return: None
     """
 
-    got_term_signal = False
+    _got_term_signal = False
 
     def __init__(self, stdout=None, stderr=None, logfilename=None,
                  loglevel=logging.INFO, logformat=default_log_format,
@@ -315,7 +315,7 @@ class DeciderServer(object):
 
     def _handle_term(self, s, f):
         logger.debug('DeciderServer()._handle_term()')
-        self.got_term_signal = True
+        self._got_term_signal = True
 
     def start(self):
         """Start the decider daemon and exit
@@ -353,7 +353,7 @@ class DeciderServer(object):
         )
         with context:
             decider = LuigiSwfDecider(**self.kwargs)
-            while not self.got_term_signal:
+            while not self._got_term_signal:
                 try:
                     logger.debug('DeciderServer().start(), decider.run()')
                     decider.run()
