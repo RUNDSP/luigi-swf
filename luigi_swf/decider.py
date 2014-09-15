@@ -36,8 +36,21 @@ seconds = 1.
 
 
 class LuigiSwfDecider(swf.Decider):
+    """Implementation of boto's SWF Decider
+
+    See :class:`DeciderServer` for daemonizing this.
+    """
 
     def run(self):
+        """Poll for and run an activity
+
+        This should be run in a loop. It will poll for up to 60 seconds. After
+        60 seconds, it will return without running any activity tasks. The user
+        should usually not need to interact with this class directly. Instead,
+        :class:`luigi_swf.DeciderServer` can be used to run the loop.
+
+        :return: None
+        """
         decision_task = self.poll()
         decisions = swf.Layer1Decisions()
         try:
@@ -227,9 +240,23 @@ class LuigiSwfDecider(swf.Decider):
 
 
 class DeciderServer(object):
-    """
-    Shut down with SIGWINCH because SIGTERM kills subprocesses even if we
-    handle it with the signal map.
+    """Decider daemon
+
+    Daemonizes :class:`luigi_swf.LuigiSwfDecider`. The SIGWINCH signal is used
+    to shut this down lazily (after processing the current activity task or
+    60-second poll) because SIGTERM kills child processes.
+
+    :param stdout: stream to which stdout will be written
+    :type stdout: stream (such as the return value of open())
+    :param stderr: stream to which stderr will be written
+    :type stderr: stream (such as the return value of open())
+    :param logfilename: file path to which the application log will be written
+    :type logfilename: str
+    :param loglevel: log level
+    :type loglevel: logging.{DEBUG|INFO|WARN|ERROR|etc}
+    :param logformat: format string of log output lines
+    :type logformat: str
+    :return: None
     """
 
     got_term_signal = False
@@ -269,7 +296,15 @@ class DeciderServer(object):
                 kwargs['aws_secret_access_key'] = secret_key
         self.kwargs = kwargs
 
-    def _pid_file(self):
+    def pid_file(self):
+        """Path to the decider daemon's PID file, even if it is not running
+
+        Append '-waiting' to this value to get the PID file path for a waiting
+        process.
+
+        :return: path to PID file
+        :rtype: str
+        """
         config = luigi.configuration.get_config()
         pid_dir = config.get('swfscheduler', 'decider-pid-file-dir')
         call(['mkdir', '-p', pid_dir])
@@ -280,6 +315,22 @@ class DeciderServer(object):
         self.got_term_signal = True
 
     def start(self):
+        """Start the decider daemon and exit
+
+        If there is already a decider daemon running, this process will wait
+        for that process to unlock its PID file before taking over. If there is
+        already another process waiting to take over, the new one will send a
+        SIGHUP to the old waiting process. This will not send any signals to
+        the process that has locked the daemon PID file -- it is your
+        responsibility to call :meth:`DeciderServer.stop` before calling this.
+        This method will return immediately and not wait for the new daemon
+        process to lock the PID file.
+
+        See :meth:`DeciderServer.pid_file` for the PID file and waiting PID
+        file paths.
+
+        :return: None
+        """
         logstream = open(self.logfilename, 'a')
         logging.basicConfig(stream=logstream, level=self.loglevel,
                             format=self.logformat)
@@ -287,7 +338,7 @@ class DeciderServer(object):
         waitconf = 'decider-pid-file-wait-sec'
         pid_wait = float(config.get('swfscheduler', waitconf, 10. * seconds))
         context = daemon.DaemonContext(
-            pidfile=SingleWaitingLockPidFile(self._pid_file(), pid_wait),
+            pidfile=SingleWaitingLockPidFile(self.pid_file(), pid_wait),
             stdout=self.stdout,
             stderr=self.stderr,
             signal_map={
@@ -309,5 +360,17 @@ class DeciderServer(object):
                 sleep(0.001 * seconds)
 
     def stop(self):
-        kill_from_pid_file(self._pid_file() + '-waiting', signal.SIGHUP)
-        kill_from_pid_file(self._pid_file(), signal.SIGWINCH)
+        """Shut down the decider daemon lazily from its PID file
+
+        The decider daemon will exit in under 60 seconds if it is polling,
+        or once the currently running decision task is finished. If it receives
+        a decision task while waiting for the poll to finish, it will process
+        the decision task and then exit. If there is a daemon process waiting
+        to take over once the currently running one shuts down, this will send
+        SIGHUP to the waiting process. This method will return immediately
+        and will not wait for the processes to stop.
+
+        :return: None
+        """
+        kill_from_pid_file(self.pid_file() + '-waiting', signal.SIGHUP)
+        kill_from_pid_file(self.pid_file(), signal.SIGWINCH)
