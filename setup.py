@@ -1,13 +1,10 @@
-import encoding
-import io
-import os.path
-from setuptools import setup, find_packages
+from setuptools import setup
 
 import luigi_swf
 
 
 setup(
-    name='luigi_swf',
+    name='luigi-swf',
     version=luigi_swf.__version__,
     url='https://github.com/RUNDSP/luigi_swf',
     license='Apache Software License',
