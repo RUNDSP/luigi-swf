@@ -10,6 +10,7 @@ import pidfile
 from six import print_
 
 
+# http://stackoverflow.com/a/2680060/1118576
 dthandler = lambda obj: (obj.isoformat()
                          if isinstance(obj, datetime.datetime)
                          or isinstance(obj, datetime.date)
@@ -17,15 +18,29 @@ dthandler = lambda obj: (obj.isoformat()
 
 
 def fullname(o):
+    """Tuple of module name and class name from object"""
     return o.__class__.__module__, o.__class__.__name__
 
 
 def get_class(module_name, class_name):
+    """Class from module name and class name"""
     module = import_module(module_name)
     return getattr(module, class_name)
 
 
 def kill_from_pid_file(pid_file, sig):
+    """Signal a process given its PID file
+
+    Sends signal ``sig`` to the process ID found in the PID file. Does not
+    raise an error if the file does not exist, a process ID could not be
+    found in the file, or the process was not found.
+
+    :param pid_file: path to PID file
+    :type pid_file: str
+    :param sig: signal to send to process
+    :type sig: signal constant from :mod:`signal` module
+               (i.e. ``signal.SIGTERM``)
+    """
     try:
         with open(pid_file, 'r') as pid_f:
             pid = long(pid_f.read().strip())
@@ -35,7 +50,16 @@ def kill_from_pid_file(pid_file, sig):
 
 
 class SingleWaitingLockPidFile(object):
-    """Locks a PID file, sending HUP signal to anyone who's already waiting."""
+    """Locks a PID file, sending ``SIGHUP`` to anyone who's already waiting.
+
+    >>> with SingleWaitingLockPidFile('aoeu.pid', 60.):
+    ...     print('test')
+
+    :param pidfilepath: path to PID file to lock
+    :type pidfilepath: str
+    :param timeout_sec: how long to wait to lock the PID file (in seconds)
+    :type timeout_sec: int
+    """
 
     def __init__(self, pidfilepath, timeout_sec):
         self.pidfilepath = pidfilepath
@@ -75,12 +99,6 @@ class SingleWaitingLockPidFile(object):
             self.wait_pidfile.__exit__(None, None, None)
         except:
             pass
-
-
-def get_git_commit_hash():
-    thisdir = os.path.dirname(os.path.realpath(__file__))
-    git_hash_cmd = 'cd {0} && git rev-parse --short HEAD'.format(thisdir)
-    return check_output(git_hash_cmd, shell=True).strip()
 
 
 def get_luigi_params(task):
