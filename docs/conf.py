@@ -337,4 +337,5 @@ epub_exclude_files = ['search.html']
 intersphinx_mapping = {
 	'boto': ('http://boto.readthedocs.org/en/latest/', None),
 	'python': ('http://docs.python.org/2.7', None),
+  'luigi': ('http://luigi.readthedocs.org/en/latest/', None),
 }

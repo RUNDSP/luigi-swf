@@ -18,6 +18,27 @@ pp = pprint.PrettyPrinter(indent=2)
 
 
 class LuigiSwfExecutor(object):
+    """Workflow execution launcher
+
+    Can receive AWS credentials in ``__init__()`` or read
+    ``[swfscheduler]->aws_access_key_id`` and
+    ``[swfscheduler]->aws_secret_access_key`` from Luigi's client.cfg.
+    Otherwise, boto will try to read the credentials from environment
+    variables or the EC2 instance metadata (if using an IAM role).
+
+    :param domain: SWF domain
+    :type domain: str
+    :param version: SWF version (you may put "unspecified" if you don't
+                    need this)
+    :type version: str
+    :param workflow_task: wrapper task that defines the workflow through
+                          its ``requires()``
+    :type workflow_task: :class:`luigi.task.WrapperTask`
+    :param aws_access_key_id: optional if using environment, config, or IAM
+    :type aws_access_key_id: str
+    :param aws_secret_access_key: optional if using environment, config, or IAM
+    :type aws_secret_access_key: str
+    """
 
     def __init__(self, domain, version, workflow_task,
                  aws_access_key_id=None, aws_secret_access_key=None):
@@ -81,6 +102,15 @@ class LuigiSwfExecutor(object):
         return tasks
 
     def register(self):
+        """Registers the workflow type and task types with SWF
+
+        It is necessary to do this each time a new task is added to a workflow.
+        It is safest to run this before each call to :meth:`execute` if you are
+        just launching a workflow from a cron. However, if you are launching
+        many workflows and calling :meth:`execute` many times, you may want to
+        consider calling this method only when necessary because it can
+        contribute to an SWF API throttling issue.
+        """
         tasks = self._get_all_tasks(self.workflow_task)
         registerables = []
         registerables.append(swf.Domain(name=self.domain))
@@ -106,6 +136,10 @@ class LuigiSwfExecutor(object):
                        'already exists')
 
     def execute(self):
+        """Initiates a workflow execution on SWF and returns immediately
+
+        Run :meth:`register` first.
+        """
         all_tasks = self._get_all_tasks(self.workflow_task)
         logger.debug('LuigiSwfExecutor().execute(), all_tasks:\n%s',
                      pp.pformat(all_tasks))
