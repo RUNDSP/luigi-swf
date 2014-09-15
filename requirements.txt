@@ -1,6 +1,0 @@
-arrow
-boto
-luigi
-pidfile
-python-daemon
-six
