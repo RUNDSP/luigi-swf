@@ -10,10 +10,10 @@ setup(
     license='Apache Software License',
     author='Mike Placentra',
     install_requires=[
-	],
+    ],
     author_email='mplacentra@runads.com',
     description=("Spotify's Luigi + Amazon's Simple "
-    			 "Workflow Service integration"),
+                 "Workflow Service integration"),
     long_description='',
     packages=['luigi_swf'],
     platforms='any',
