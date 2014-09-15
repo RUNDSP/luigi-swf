@@ -242,19 +242,22 @@ class LuigiSwfDecider(swf.Decider):
 class DeciderServer(object):
     """Decider daemon
 
-    Daemonizes :class:`LuigiSwfDecider`. The SIGWINCH signal is used to shut
-    this down lazily (after processing the current activity task or 60-second
-    poll) because SIGTERM kills child processes.
+    Daemonizes :class:`LuigiSwfDecider`. The ``SIGWINCH`` signal is used to
+    shut this down lazily (after processing the current activity task or
+    60-second poll) because ``SIGTERM`` kills child processes.
 
     :param stdout: stream to which stdout will be written
-    :type stdout: stream (such as the return value of open())
+    :type stdout: stream (such as the return value of :func:`open`)
     :param stderr: stream to which stderr will be written
-    :type stderr: stream (such as the return value of open())
+    :type stderr: stream (such as the return value of :func:`open`)
     :param logfilename: file path to which the application log will be written
     :type logfilename: str
     :param loglevel: log level
-    :type loglevel: logging.{DEBUG|INFO|WARN|ERROR|etc}
-    :param logformat: format string of log output lines
+    :type loglevel: log level constant from the :mod:`logging` module
+                    (``logging.DEBUG``, ``logging.INFO``, ``logging.ERROR``,
+                    etc.)
+    :param logformat: format string of log output lines, as in the
+                      :mod:`logging` module
     :type logformat: str
     :return: None
     """
