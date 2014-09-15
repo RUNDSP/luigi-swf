@@ -1,13 +1,6 @@
 luigi_swf package
 =================
 
-Subpackages
------------
-
-.. toctree::
-
-    luigi_swf.examples
-
 Submodules
 ----------
 
