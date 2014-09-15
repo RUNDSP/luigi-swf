@@ -10,6 +10,12 @@ setup(
     license='Apache Software License',
     author='Mike Placentra',
     install_requires=[
+        'arrow>=0.4.2',
+        'boto>=2.28.0',
+        'luigi>=1.0.16',
+        'pidfile>=0.1.0',
+        'python-daemon>=1.6.1',
+        'six>=1.6.1',
     ],
     author_email='mplacentra@runads.com',
     description=("Spotify's Luigi + Amazon's Simple "
