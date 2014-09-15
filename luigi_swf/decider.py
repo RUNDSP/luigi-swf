@@ -47,7 +47,7 @@ class LuigiSwfDecider(swf.Decider):
         This should be run in a loop. It will poll for up to 60 seconds. After
         60 seconds, it will return without running any activity tasks. The user
         should usually not need to interact with this class directly. Instead,
-        :class:`luigi_swf.DeciderServer` can be used to run the loop.
+        :class:`DeciderServer` can be used to run the loop.
 
         :return: None
         """
@@ -242,9 +242,9 @@ class LuigiSwfDecider(swf.Decider):
 class DeciderServer(object):
     """Decider daemon
 
-    Daemonizes :class:`luigi_swf.LuigiSwfDecider`. The SIGWINCH signal is used
-    to shut this down lazily (after processing the current activity task or
-    60-second poll) because SIGTERM kills child processes.
+    Daemonizes :class:`LuigiSwfDecider`. The SIGWINCH signal is used to shut
+    this down lazily (after processing the current activity task or 60-second
+    poll) because SIGTERM kills child processes.
 
     :param stdout: stream to which stdout will be written
     :type stdout: stream (such as the return value of open())
