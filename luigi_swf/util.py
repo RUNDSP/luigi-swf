@@ -1,19 +1,27 @@
 import datetime
+import json
 from importlib import import_module
 import os
 import signal
 from subprocess import check_output
 from time import sleep
 
+import arrow
 import luigi
 import pidfile
 from six import print_
 
 
 # http://stackoverflow.com/a/2680060/1118576
+seconds = 1
+minutes = 60 * seconds
+hours = 60 * minutes
+
+
 dthandler = lambda obj: (obj.isoformat()
                          if isinstance(obj, datetime.datetime)
                          or isinstance(obj, datetime.date)
+                         or isinstance(obj, arrow.Arrow)
                          else None)
 
 
@@ -124,6 +132,46 @@ def get_luigi_params(task):
 # It would be nice to read this from a config file, but ConfigParser doesn't
 # allow escaping of percent signs in any reasonable way.
 default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
+
+
+def get_all_tasks(task, include_obj=False):
+    deps = task.deps()
+    start_to_close = getattr(task, 'swf_start_to_close_timeout', None)
+    if start_to_close is None:
+        start_to_close = 'NONE'
+    else:
+        start_to_close = long(start_to_close)
+    schedule_to_start = getattr(task, 'swf_schedule_to_start_timeout', None)
+    if schedule_to_start is None:
+        schedule_to_start = long(5 * minutes)
+    else:
+        schedule_to_start = long(schedule_to_start)
+    heartbeat = getattr(task, 'swf_heartbeat_timeout', None)
+    if heartbeat is None:
+        heartbeat = 'NONE'
+    else:
+        heartbeat = long(heartbeat)
+    schedule_to_close = 'NONE'
+    tasks = {
+        task.task_id: {
+            'class': fullname(task),
+            'task_family': task.task_family,
+            'deps': [d.task_id for d in deps],
+            'task_list': getattr(task, 'swf_task_list', 'default'),
+            'params': json.dumps(get_luigi_params(task), default=dthandler),
+            'retries': getattr(task, 'swf_retries', 0),
+            'heartbeat_timeout': heartbeat,
+            'start_to_close_timeout': start_to_close,
+            'schedule_to_start_timeout': schedule_to_start,
+            'schedule_to_close_timeout': schedule_to_close,
+            'is_wrapper': isinstance(task, luigi.WrapperTask),
+        }
+    }
+    if include_obj:
+        tasks[task.task_id]['task'] = task
+    for dep in deps:
+        tasks.update(get_all_tasks(dep))
+    return tasks
 
 
 if __name__ == "__main__":

@@ -12,13 +12,14 @@ import sys
 from time import sleep
 import traceback
 
+import arrow
 import boto.swf.layer2 as swf
 import daemon
 import luigi.configuration
 from six import iteritems
 
 from .util import default_log_format, dthandler, kill_from_pid_file, \
-    SingleWaitingLockPidFile
+    SingleWaitingLockPidFile, get_all_tasks, get_class
 
 
 logger = logging.getLogger(__name__)
@@ -89,9 +90,21 @@ class LuigiSwfDecider(swf.Decider):
         wf_event = next(e for e in events
                         if e['eventType'] == 'WorkflowExecutionStarted')
         wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
-        all_tasks = pickle.loads(str(wf_event_attr['input']))
-        logger.debug('LuigiSwfDecider()._get_all_tasks(), all_tasks:\n%s',
-                     pp.pformat(all_tasks))
+        wf_input = json.loads(str(wf_event_attr['input']))
+        wf_params = wf_input['wf_params']
+        logger.debug('LuigiSwfDecider()._get_all_tasks(), wf_input:\n%s',
+                     pp.pformat(wf_input))
+        wf_cls = get_class(*wf_input['wf_task'])
+        kwargs = dict()
+        for param_name, param_cls in wf_cls.get_params():
+            if param_name == 'pool':
+                continue
+            if isinstance(param_cls, luigi.DateParameter):
+                kwargs[param_name] = arrow.get(wf_params[param_name])
+            else:
+                kwargs[param_name] = wf_params[param_name]
+        wf_task = wf_cls(**kwargs)
+        all_tasks = get_all_tasks(wf_task, include_obj=True)
         return all_tasks
 
     def _get_version(self, events):
@@ -207,6 +220,7 @@ class LuigiSwfDecider(swf.Decider):
                 continue
             scheduled_count += 1
             start_to_close = task['start_to_close_timeout']
+            schedule_to_start = task['schedule_to_start_timeout']
             schedule_to_close = task['schedule_to_close_timeout']
             decisions.schedule_activity_task(
                 activity_id=task_id,
@@ -215,8 +229,9 @@ class LuigiSwfDecider(swf.Decider):
                 task_list=task['task_list'],
                 heartbeat_timeout=str(task['heartbeat_timeout']),
                 start_to_close_timeout=str(start_to_close),
+                schedule_to_start_timeout=str(schedule_to_start),
                 schedule_to_close_timeout=str(schedule_to_close),
-                input=json.dumps(task, dthandler))
+                input=json.dumps(task, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
         if scheduled_count == 0 and len(state['running']) == 0:
             if len(state['unretryables']) > 0:
