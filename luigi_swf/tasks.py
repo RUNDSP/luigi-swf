@@ -18,6 +18,7 @@ class SwfHeartbeatCancel(object):
     """
 
     cancel_requested = False
+    cancel_acked = False
 
     def heartbeat(self):
         """Send heartbeat to SWF and check if cancellation was requested
@@ -46,6 +47,7 @@ class SwfHeartbeatCancel(object):
         logger.info("SwfHeartbeatCancel().ack_cancel(), %s, ack'ing cancel",
                     self.activity_id)
         self.activity_worker.cancel()
+        self.cancel_acked = True
 
     def register_activity_worker(self, activity_worker, activity_id):
         """Register the activity worker as an observer of heartbeats

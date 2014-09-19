@@ -72,19 +72,28 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 task.register_activity_worker(self,
                                               activity_task['activityId'])
             task.run()
-            task_completed = task.complete()
+            if not getattr(task, 'cancel_acked', False):
+                task.on_success()
+                task_completed = task.complete()
+            else:
+                task_completed = False
         except Exception, error:
             tb = traceback.format_exc()
+            try:
+                message = task.on_failure(error)
+            except:
+                message = 'on_failure() failed: \n' + traceback.format_exc()
             logger.error('LuigiSwfWorker().run(), %s, error:\n%s',
                          activity_task['activityId'], tb)
-            details = tb + '\n\n\n' + str(error)
+            details = (tb + '\n\n\n' + str(error) + '\n\n\non_failure():\n' +
+                       message)
             self.fail(reason=str(error)[:255], details=details[:32767])
             raise
         if task_completed:
             self.complete()
             logger.info('LuigiSwfWorker().run(), completed %s',
                         activity_task['activityId'])
-        else:
+        elif not getattr(task, 'cancel_acked', False):
             reason = 'complete() returned false after running'
             logger.error('LuigiSwfWorker().run(), %s, failed (%s)',
                          activity_task['activityId'], reason)
