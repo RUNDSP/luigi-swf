@@ -10,7 +10,7 @@ import luigi
 import luigi.configuration
 from six import iteritems, print_
 
-from .util import dthandler, fullname, get_luigi_params
+from .util import fullname, get_all_tasks, get_luigi_params, dthandler
 
 
 logger = logging.getLogger(__name__)
@@ -18,6 +18,27 @@ pp = pprint.PrettyPrinter(indent=2)
 
 
 class LuigiSwfExecutor(object):
+    """Workflow execution launcher
+
+    Can receive AWS credentials in ``__init__()`` or read
+    ``[swfscheduler]->aws_access_key_id`` and
+    ``[swfscheduler]->aws_secret_access_key`` from Luigi's client.cfg.
+    Otherwise, boto will try to read the credentials from environment
+    variables or the EC2 instance metadata (if using an IAM role).
+
+    :param domain: SWF domain
+    :type domain: str
+    :param version: SWF version (you may put "unspecified" if you don't
+                    need this)
+    :type version: str
+    :param workflow_task: wrapper task that defines the workflow through
+                          its ``requires()``
+    :type workflow_task: :class:`luigi.task.WrapperTask`
+    :param aws_access_key_id: optional if using environment, config, or IAM
+    :type aws_access_key_id: str
+    :param aws_secret_access_key: optional if using environment, config, or IAM
+    :type aws_secret_access_key: str
+    """
 
     def __init__(self, domain, version, workflow_task,
                  aws_access_key_id=None, aws_secret_access_key=None):
@@ -48,40 +69,17 @@ class LuigiSwfExecutor(object):
             swf.set_default_credentials(aws_access_key_id,
                                         aws_secret_access_key)
 
-    def _get_all_tasks(self, task):
-        deps = task.deps()
-        start_to_close = getattr(task, 'swf_start_to_close_timeout', None)
-        if start_to_close is None:
-            start_to_close = 'NONE'
-        else:
-            start_to_close = long(start_to_close)
-        heartbeat = getattr(task, 'swf_heartbeat_timeout', None)
-        if heartbeat is None:
-            heartbeat = 'NONE'
-        else:
-            heartbeat = long(heartbeat)
-        schedule_to_close = 'NONE'
-        tasks = {
-            task.task_id: {
-                'class': fullname(task),
-                'task_family': task.task_family,
-                'deps': [d.task_id for d in deps],
-                'task_list': getattr(task, 'swf_task_list', 'default'),
-                'params': json.dumps(get_luigi_params(task),
-                                     default=dthandler),
-                'retries': getattr(task, 'swf_retries', 0),
-                'heartbeat_timeout': heartbeat,
-                'start_to_close_timeout': start_to_close,
-                'schedule_to_close_timeout': schedule_to_close,
-                'is_wrapper': isinstance(task, luigi.WrapperTask),
-            }
-        }
-        for dep in deps:
-            tasks.update(self._get_all_tasks(dep))
-        return tasks
-
     def register(self):
-        tasks = self._get_all_tasks(self.workflow_task)
+        """Registers the workflow type and task types with SWF
+
+        It is necessary to do this each time a new task is added to a workflow.
+        It is safest to run this before each call to :meth:`execute` if you are
+        just launching a workflow from a cron. However, if you are launching
+        many workflows and calling :meth:`execute` many times, you may want to
+        consider calling this method only when necessary because it can
+        contribute to an SWF API throttling issue.
+        """
+        tasks = get_all_tasks(self.workflow_task)
         registerables = []
         registerables.append(swf.Domain(name=self.domain))
         task_dats = set((t['task_family'], t['task_list'])
@@ -106,11 +104,15 @@ class LuigiSwfExecutor(object):
                        'already exists')
 
     def execute(self):
-        all_tasks = self._get_all_tasks(self.workflow_task)
-        logger.debug('LuigiSwfExecutor().execute(), all_tasks:\n%s',
-                     pp.pformat(all_tasks))
+        """Initiates a workflow execution on SWF and returns immediately
+
+        Run :meth:`register` first.
+        """
         wf_id = self.workflow_task.task_id
-        wf_input = pickle.dumps(all_tasks)
+        wf_input = json.dumps({
+            'wf_task': fullname(self.workflow_task),
+            'wf_params': get_luigi_params(self.workflow_task),
+        }, default=dthandler)
         wf_type = swf.WorkflowType(domain=self.domain,
                                    version=self.version,
                                    name=self.workflow_task.task_family,

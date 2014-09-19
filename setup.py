@@ -28,7 +28,6 @@ setup(
         'Natural Language :: English',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: Apache Software License',
-        'Operating System :: OS Independent',
         'Topic :: Software Development :: Libraries :: Python Modules',
     ],
 )
