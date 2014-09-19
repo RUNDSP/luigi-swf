@@ -17,7 +17,7 @@ setup(
         'six>=1.6.1',
     ],
     author='Mike Placentra',
-    author_email='mplacentra@runads.com',
+    author_email='someone@michaelplacentra2.net',
     description=("Spotify's Luigi + Amazon's Simple "
                  "Workflow Service integration"),
     long_description='',
