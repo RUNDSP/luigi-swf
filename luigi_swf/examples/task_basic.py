@@ -36,7 +36,7 @@ class DemoBasicTask(luigi.Task):
         return luigi.LocalTarget(path)
 
     def run(self):
-        logging.info('hi | %s', self.dt)
+        logger.info('hi | %s', self.dt)
         call(['touch', self.output().path])
 
 

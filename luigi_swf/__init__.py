@@ -4,4 +4,4 @@ from .executor import LuigiSwfExecutor
 from .tasks import SwfHeartbeatCancel
 
 
-__version__ = '0.4'
+__version__ = '0.5'
