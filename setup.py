@@ -22,6 +22,10 @@ setup(
                  "Workflow Service integration"),
     long_description='',
     packages=['luigi_swf'],
+    scripts=[
+        'bin/swf_decider_server.py',
+        'bin/swf_worker_server.py',
+    ],
     platforms='any',
     classifiers = [
         'Programming Language :: Python',
