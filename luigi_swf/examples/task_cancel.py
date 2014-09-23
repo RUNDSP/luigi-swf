@@ -61,7 +61,7 @@ class DemoCancelWorkflow(luigi.WrapperTask):
 
 if __name__ == '__main__':
     task = DemoCancelWorkflow()
-    domain = 'test_domain'
+    domain = 'development'
     version = 'unspecified'
     ex = LuigiSwfExecutor(domain, version, task)
     ex.register()
