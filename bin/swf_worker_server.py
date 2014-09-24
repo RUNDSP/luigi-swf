@@ -18,7 +18,7 @@ if __name__ == '__main__':
     config = luigi.configuration.get_config()
     loglevel_name = config.get('logging', 'level')
     loglevel = getattr(logging, loglevel_name.upper())
-    if args.action == 'start'
+    if args.action == 'start':
         if args.index is None:
             # Start all
             num_workers = config.getint('swfscheduler', 'num-workers')
