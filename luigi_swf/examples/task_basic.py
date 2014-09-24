@@ -7,7 +7,7 @@ from subprocess import call
 
 import luigi
 
-from luigi_swf import LuigiSwfExecutor, SwfHeartbeatCancel
+from luigi_swf import LuigiSwfExecutor
 
 
 logger = logging.getLogger(__name__)
@@ -53,7 +53,7 @@ class DemoBasicWorkflow(luigi.WrapperTask):
 
 if __name__ == '__main__':
     task = DemoBasicWorkflow(dt=datetime.datetime(2000, 1, 1))
-    domain = 'test_domain'
+    domain = 'development'
     version = 'unspecified'
     ex = LuigiSwfExecutor(domain, version, task)
     ex.register()
