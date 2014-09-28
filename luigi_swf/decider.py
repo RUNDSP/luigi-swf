@@ -187,7 +187,7 @@ class LuigiSwfDecider(swf.Decider):
         retries_flat = \
             [retry
              for e in events
-             for retry in self._parse_retries(self.e[attrWfSignaled]['input'])
+             for retry in self._parse_retries(e[attrWfSignaled]['input'])
              if e['eventType'] == 'WorkflowExecutionSignaled'
              and e[attrWfSignaled]['signalName'] == 'retry']
         state['retries'] = Counter(retries_flat)
