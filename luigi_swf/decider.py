@@ -223,7 +223,6 @@ class LuigiSwfDecider(swf.Decider):
         return state
 
     def _parse_retries(self, task_ids):
-        logger.debug('LuigiSwfDecider()._parse_retries(), input:\n%s', jinput)
         try:
             return map(lambda s: s.strip(), task_ids.strip().split('\n'))
         except:
