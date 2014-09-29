@@ -217,7 +217,7 @@ class LuigiSwfDecider(swf.Decider):
                                                       state['running']))
         state['unretryables'] = list(self._get_unretryables(all_tasks,
                                                             state['failures'],
-                                                            retries))
+                                                            state['retries']))
         logger.debug('LuigiSwfDecider().get_state(), state:\n%s',
                      pp.pformat(state))
         return state
