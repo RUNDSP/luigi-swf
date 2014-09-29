@@ -32,6 +32,7 @@ attrTaskFailed = 'activityTaskFailedEventAttributes'
 attrTaskTimedOut = 'activityTaskTimedOutEventAttributes'
 attrTaskCancReq = 'activityTaskCancelRequestedEventAttributes'
 attrTaskCanceled = 'activityTaskCanceledEventAttributes'
+attrWfSignaled = 'workflowExecutionSignaledEventAttributes'
 
 seconds = 1.
 
@@ -141,9 +142,9 @@ class LuigiSwfDecider(swf.Decider):
                     all(d in completed for d in task['deps']):
                 yield task_id, task
 
-    def _get_unretryables(self, all_tasks, failed):
+    def _get_unretryables(self, all_tasks, failed, retries):
         for task_id, count in iteritems(failed):
-            if count > all_tasks[task_id]['retries']:
+            if count > all_tasks[task_id]['retries'] + retries.get(task_id, 0):
                 yield task_id
 
     def _get_completed_wrappers(self, all_tasks, completed_activities):
@@ -183,6 +184,13 @@ class LuigiSwfDecider(swf.Decider):
                          for e in events
                          if e['eventType'] == 'ActivityTaskTimedOut']
         state['timeouts'] = Counter(timeouts_flat)
+        retries_flat = \
+            [retry
+             for e in events
+             if (e['eventType'] == 'WorkflowExecutionSignaled'
+                 and e[attrWfSignaled]['signalName'] == 'retry')
+             for retry in self._parse_retries(e[attrWfSignaled]['input'])]
+        state['retries'] = Counter(retries_flat)
         state['wf_cancel_req'] = any(e for e in events
                                      if e['eventType'] == ('WorkflowExecution'
                                                            'CancelRequested'))
@@ -208,10 +216,19 @@ class LuigiSwfDecider(swf.Decider):
                                                       state['completed'],
                                                       state['running']))
         state['unretryables'] = list(self._get_unretryables(all_tasks,
-                                                            state['failures']))
+                                                            state['failures'],
+                                                            state['retries']))
         logger.debug('LuigiSwfDecider().get_state(), state:\n%s',
                      pp.pformat(state))
         return state
+
+    def _parse_retries(self, task_ids):
+        try:
+            return map(lambda s: s.strip(), task_ids.strip().split('\n'))
+        except:
+            tb = traceback.format_exc()
+            logger.error('LuigiSwfDecider()._parse_retries():\n%s', tb)
+            return []
 
     def _schedule_activities(self, state, decisions, version):
         scheduled_count = 0
