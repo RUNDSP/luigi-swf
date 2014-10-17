@@ -10,6 +10,11 @@ like retries and timeouts. See `./luigi_swf/examples/daemons/` for an example
 monitrc and deploy strategy to run the daemons (one decider and many
 workers).
 
+## Documentation
+
+We don't have documentation yet. See the docstrings or build the API docs
+with Sphinx.
+
 ## Installation
 
 ```bash
