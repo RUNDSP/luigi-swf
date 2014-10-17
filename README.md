@@ -1,7 +1,7 @@
 luigi-swf
 =========
 
-Spotify's Luigi + Amazon's Simple Workflow Service (SWF) integration
+[Spotify's Luigi](https://github.com/spotify/luigi) + [Amazon's Simple Workflow Service (SWF)](http://aws.amazon.com/swf/) integration
 
 ## Examples
 
