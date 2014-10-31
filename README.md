@@ -23,4 +23,7 @@ pip install luigi-swf
 
 ## Changelog
 
+* 0.10: added optional free-form identity strings to deciders and activity
+workers. Activity workers previously provided the worker index as the identity,
+but now the worker index is appended to the given identity string.
 * 0.9: added "retry" signal (signal name is "retry", input is SWF Activity ID)
