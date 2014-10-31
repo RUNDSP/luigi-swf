@@ -33,7 +33,7 @@ class LuigiSwfWorker(swf.ActivityWorker):
     See :class:`WorkerServer` for daemonizing this.
     """
 
-    def run(self, identity):
+    def run(self, identity=None):
         """Poll for and run an activity task
 
         This should be run in a loop. It will poll for up to 60 seconds. After
@@ -127,9 +127,9 @@ class WorkerServer(object):
 
     _got_term_signal = False
 
-    def __init__(self, worker_idx, stdout=None, stderr=None, logfilename=None,
-                 loglevel=logging.INFO, logformat=default_log_format,
-                 **kwargs):
+    def __init__(self, worker_idx, identity=None, stdout=None, stderr=None,
+                 logfilename=None, loglevel=logging.INFO,
+                 logformat=default_log_format, **kwargs):
         self.worker_idx = worker_idx
         config = luigi.configuration.get_config()
         if stdout is None:
@@ -162,7 +162,16 @@ class WorkerServer(object):
             if access_key is not None and secret_key is not None:
                 kwargs['aws_access_key_id'] = access_key
                 kwargs['aws_secret_access_key'] = secret_key
-        self.identity = 'worker-' + str(worker_idx)
+        if worker_idx is not None:
+            if identity is not None:
+                self.identity = '{0}-{1}'.format(identity, worker_idx)
+            else:
+                self.identity = str(worker_idx)
+        else:
+            if identity is not None:
+                self.identity = str(identity)
+            else:
+                self.identity = None
         self.kwargs = kwargs
 
     def pid_file(self):

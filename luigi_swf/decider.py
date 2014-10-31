@@ -43,7 +43,7 @@ class LuigiSwfDecider(swf.Decider):
     See :class:`DeciderServer` for daemonizing this.
     """
 
-    def run(self):
+    def run(self, identity=None):
         """Poll for and run a decision task
 
         This should be run in a loop. It will poll for up to 60 seconds. After
@@ -53,7 +53,7 @@ class LuigiSwfDecider(swf.Decider):
 
         :return: None
         """
-        decision_task = self.poll()
+        decision_task = self.poll(identity=identity)
         decisions = swf.Layer1Decisions()
         try:
             if 'events' not in decision_task:
@@ -296,9 +296,9 @@ class DeciderServer(object):
 
     _got_term_signal = False
 
-    def __init__(self, stdout=None, stderr=None, logfilename=None,
-                 loglevel=logging.INFO, logformat=default_log_format,
-                 **kwargs):
+    def __init__(self, identity=None, stdout=None, stderr=None,
+                 logfilename=None, loglevel=logging.INFO,
+                 logformat=default_log_format, **kwargs):
         logger.debug('DeciderServer.__init__(...)')
         config = luigi.configuration.get_config()
         if stdout is None:
@@ -329,6 +329,7 @@ class DeciderServer(object):
             if access_key is not None and secret_key is not None:
                 kwargs['aws_access_key_id'] = access_key
                 kwargs['aws_secret_access_key'] = secret_key
+        self.identity = identity
         self.kwargs = kwargs
 
     def pid_file(self):
@@ -387,7 +388,7 @@ class DeciderServer(object):
             while not self._got_term_signal:
                 try:
                     logger.debug('DeciderServer().start(), decider.run()')
-                    decider.run()
+                    decider.run(self.identity)
                 except Exception as ex:
                     tb = traceback.format_exc()
                     logger.error('DeciderServer().start(), error:\n%s', tb)
