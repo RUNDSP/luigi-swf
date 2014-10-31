@@ -25,7 +25,10 @@ if __name__ == '__main__':
             # Start all
             num_workers = config.getint('swfscheduler', 'num-workers')
             for worker_idx in xrange(num_workers):
-                call([__file__, 'start', '-i', str(worker_idx)])
+                worker_args = [__file__, 'start', '-i', str(worker_idx)]
+                if args.identity is not None:
+                    worker_args += ['--identity', args.identity]
+                call(worker_args)
         else:
             # Start one
             server = WorkerServer(worker_idx=args.index,
