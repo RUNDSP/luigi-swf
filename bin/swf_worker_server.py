@@ -15,6 +15,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='start/stop SWF worker(s)')
     parser.add_argument('action', choices=['start', 'stop'])
     parser.add_argument('--index', '-i', type=int, default=None)
+    parser.add_argument('--identity', default=None)
     args = parser.parse_args()
     config = luigi.configuration.get_config()
     loglevel_name = config.get('logging', 'level')
@@ -24,10 +25,14 @@ if __name__ == '__main__':
             # Start all
             num_workers = config.getint('swfscheduler', 'num-workers')
             for worker_idx in xrange(num_workers):
-                call([__file__, 'start', '-i', str(worker_idx)])
+                worker_args = [__file__, 'start', '-i', str(worker_idx)]
+                if args.identity is not None:
+                    worker_args += ['--identity', args.identity]
+                call(worker_args)
         else:
             # Start one
             server = WorkerServer(worker_idx=args.index,
+                                  identity=args.identity,
                                   version='unspecified',
                                   loglevel=loglevel)
             server.start()
