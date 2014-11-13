@@ -69,8 +69,7 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 self.complete(result=result)
                 return
             if hasattr(task, 'register_activity_worker'):
-                task.register_activity_worker(self,
-                                              activity_task['activityId'])
+                task.register_activity_worker(self, activity_task)
             task.run()
             if not getattr(task, 'cancel_acked', False):
                 task.on_success()
