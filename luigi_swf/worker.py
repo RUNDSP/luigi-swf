@@ -47,6 +47,7 @@ class LuigiSwfWorker(swf.ActivityWorker):
         if 'activityId' not in activity_task:
             logger.debug('LuigiSwfWorker().run(), poll timed out')
             return
+        task = None
         try:
             logger.info('LuigiSwfWorker().run(), %s, processing',
                         activity_task['activityId'])
@@ -78,10 +79,12 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 task_completed = False
         except Exception, error:
             tb = traceback.format_exc()
-            try:
-                message = task.on_failure(error)
-            except:
-                message = 'on_failure() failed: \n' + traceback.format_exc()
+            if task is not None:
+                try:
+                    message = task.on_failure(error)
+                except:
+                    message = ('on_failure() failed: \n' +
+                               traceback.format_exc())
             logger.error('LuigiSwfWorker().run(), %s, error:\n%s',
                          activity_task['activityId'], tb)
             details = (tb + '\n\n\n' + str(error) + '\n\n\non_failure():\n' +
