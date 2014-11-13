@@ -64,13 +64,13 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 else:
                     kwargs[param_name] = input_params[param_name]
             task = task_cls(**kwargs)
+            if hasattr(task, 'register_activity_worker'):
+                task.register_activity_worker(self, activity_task)
             if task.complete():
                 result = 'Did not run (task.complete() returned true)'
                 logger.debug('LuigiSwfWorker().run(), %s, %s', result)
                 self.complete(result=result)
                 return
-            if hasattr(task, 'register_activity_worker'):
-                task.register_activity_worker(self, activity_task)
             task.run()
             if not getattr(task, 'cancel_acked', False):
                 task.on_success()
