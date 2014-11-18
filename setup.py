@@ -1,11 +1,9 @@
 from setuptools import setup
 
-import luigi_swf
-
 
 setup(
     name='luigi-swf',
-    version=luigi_swf.__version__,
+    version='0.11',
     url='https://github.com/RUNDSP/luigi_swf',
     license='Apache Software License',
     install_requires=[

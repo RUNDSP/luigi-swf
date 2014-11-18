@@ -49,7 +49,7 @@ class SwfHeartbeatCancel(object):
         self.activity_worker.cancel()
         self.cancel_acked = True
 
-    def register_activity_worker(self, activity_worker, activity_id):
+    def register_activity_worker(self, activity_worker, activity):
         """Register the activity worker as an observer of heartbeats
 
         Called by :class:`luigi_swf.worker.LuigiSwfWorker` to register itself
@@ -57,4 +57,4 @@ class SwfHeartbeatCancel(object):
         :meth:`heartbeat` and :meth:`ack_cancel` from this class.
         """
         self.activity_worker = activity_worker
-        self.activity_id = activity_id
+        self.activity_id = activity['activityId']
