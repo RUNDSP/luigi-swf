@@ -23,6 +23,9 @@ pip install luigi-swf
 
 ## Changelog
 
+* 0.11: register_activity_worker() now takes the full SWF activity object as an
+argument (instead of just the activity ID). also, register_activity_worker() is
+called before complete().
 * 0.10: added optional free-form identity strings to deciders and activity
 workers. Activity workers previously provided the worker index as the identity,
 but now the worker index is appended to the given identity string.
