@@ -16,6 +16,7 @@ if __name__ == '__main__':
     parser.add_argument('action', choices=['start', 'stop'])
     parser.add_argument('--index', '-i', type=int, default=None)
     parser.add_argument('--identity', default=None)
+    parser.add_argument('--task-list', default=None)
     args = parser.parse_args()
     config = luigi.configuration.get_config()
     loglevel_name = config.get('logging', 'level')
@@ -28,13 +29,16 @@ if __name__ == '__main__':
                 worker_args = [__file__, 'start', '-i', str(worker_idx)]
                 if args.identity is not None:
                     worker_args += ['--identity', args.identity]
+                if args.task_list is not None:
+                    worker_args += ['--task-list', args.task_list]
                 call(worker_args)
         else:
             # Start one
             server = WorkerServer(worker_idx=args.index,
                                   identity=args.identity,
                                   version='unspecified',
-                                  loglevel=loglevel)
+                                  loglevel=loglevel,
+                                  task_list=args.task_list)
             server.start()
     elif args.action == 'stop':
         if args.index is None:
