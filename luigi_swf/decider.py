@@ -63,7 +63,7 @@ class LuigiSwfDecider(swf.Decider):
             else:
                 self._cancel_activities(state, decisions)
             self.complete(decisions=decisions)
-        except Exception, error:
+        except Exception as error:
             tb = traceback.format_exc()
             reason = ('Decider failed:\n' + str(error))[:255]
             details = (tb + '\n' + str(error))[:32767]
