@@ -7,14 +7,13 @@ from subprocess import call
 from time import sleep
 import traceback
 
-import arrow
 import boto.swf.layer2 as swf
 import daemon
 import luigi
 import luigi.configuration
 
 from .util import default_log_format, get_class, kill_from_pid_file, \
-    SingleWaitingLockPidFile
+    SingleWaitingLockPidFile, dt_from_iso
 
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 if param_name == 'pool':
                     continue
                 if isinstance(param_cls, luigi.DateParameter):
-                    kwargs[param_name] = arrow.get(input_params[param_name])
+                    kwargs[param_name] = dt_from_iso(input_params[param_name])
                 else:
                     kwargs[param_name] = input_params[param_name]
             task = task_cls(**kwargs)

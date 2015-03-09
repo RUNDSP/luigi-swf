@@ -86,3 +86,27 @@ def test_get_all_tasks():
         }
     }
     assert all_tasks == expected
+
+
+def test_dt_to_iso():
+    # Setup
+    dt = datetime.datetime(2050, 1, 2, 3, 4, 5)
+
+    # Execute
+    iso = util.dt_to_iso(dt)
+
+    # Test
+    expected = '2050-01-02T03:04:05'
+    assert iso == expected
+
+
+def test_dt_from_iso():
+    # Setup
+    iso = '2050-01-02T03:04:05'
+
+    # Execute
+    dt = util.dt_from_iso(iso)
+
+    # Test
+    expected = datetime.datetime(2050, 1, 2, 3, 4, 5)
+    assert dt == expected

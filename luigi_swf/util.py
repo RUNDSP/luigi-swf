@@ -5,7 +5,6 @@ import os
 import signal
 from time import sleep
 
-import arrow
 import luigi
 import pidfile
 
@@ -16,10 +15,9 @@ hours = 60 * minutes
 
 
 # http://stackoverflow.com/a/2680060/1118576
-dthandler = lambda obj: (obj.isoformat()
+dthandler = lambda obj: (dt_to_iso(obj)
                          if isinstance(obj, datetime.datetime)
                          or isinstance(obj, datetime.date)
-                         or isinstance(obj, arrow.Arrow)
                          else None)
 
 
@@ -170,6 +168,14 @@ def get_all_tasks(task, include_obj=False):
     for dep in deps:
         tasks.update(get_all_tasks(dep))
     return tasks
+
+
+def dt_to_iso(dt):
+    return dt.strftime("%Y-%m-%dT%H:%M:%S")
+
+
+def dt_from_iso(iso):
+    return datetime.datetime.strptime(iso, "%Y-%m-%dT%H:%M:%S")
 
 
 if __name__ == "__main__":

@@ -7,7 +7,6 @@ setup(
     url='https://github.com/RUNDSP/luigi_swf',
     license='Apache Software License',
     install_requires=[
-        'arrow>=0.4.2',
         'boto>=2.28.0',
         'luigi>=1.0.16',
         'pidfile>=0.1.0',
