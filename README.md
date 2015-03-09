@@ -1,6 +1,8 @@
 luigi-swf
 =========
 
+[![Circle CI](https://circleci.com/gh/RUNDSP/luigi-swf.svg?style=svg)](https://circleci.com/gh/RUNDSP/luigi-swf)
+
 [Spotify's Luigi](https://github.com/spotify/luigi) + [Amazon's Simple Workflow Service (SWF)](http://aws.amazon.com/swf/) integration
 
 ## Examples
