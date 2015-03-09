@@ -10,12 +10,12 @@ import luigi
 import pidfile
 
 
-# http://stackoverflow.com/a/2680060/1118576
 seconds = 1
 minutes = 60 * seconds
 hours = 60 * minutes
 
 
+# http://stackoverflow.com/a/2680060/1118576
 dthandler = lambda obj: (obj.isoformat()
                          if isinstance(obj, datetime.datetime)
                          or isinstance(obj, datetime.date)
