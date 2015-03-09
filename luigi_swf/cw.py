@@ -2,17 +2,17 @@ import argparse
 
 
 def cw_update(tasks):
-	pass
+    pass
 
 
 def cw_on(task):
-	pass
+    pass
 
 
 def cw_off(task):
-	pass
+    pass
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser('Control CloudWatch monitoring')
-	# TODO
+    parser = argparse.ArgumentParser('Control CloudWatch monitoring')
+    # TODO
