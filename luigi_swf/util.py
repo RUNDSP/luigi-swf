@@ -49,7 +49,7 @@ def kill_from_pid_file(pid_file, sig):
     """
     try:
         with open(pid_file, 'r') as pid_f:
-            pid = long(pid_f.read().strip())
+            pid = int(pid_f.read().strip())
         os.kill(pid, sig)
     except (IOError, OSError, ValueError):
         pass
@@ -138,17 +138,17 @@ def get_all_tasks(task, include_obj=False):
     if start_to_close is None:
         start_to_close = 'NONE'
     else:
-        start_to_close = long(start_to_close)
+        start_to_close = int(start_to_close)
     schedule_to_start = getattr(task, 'swf_schedule_to_start_timeout', None)
     if schedule_to_start is None:
-        schedule_to_start = long(5 * minutes)
+        schedule_to_start = int(5 * minutes)
     else:
-        schedule_to_start = long(schedule_to_start)
+        schedule_to_start = int(schedule_to_start)
     heartbeat = getattr(task, 'swf_heartbeat_timeout', None)
     if heartbeat is None:
         heartbeat = 'NONE'
     else:
-        heartbeat = long(heartbeat)
+        heartbeat = int(heartbeat)
     schedule_to_close = 'NONE'
     tasks = {
         task.task_id: {

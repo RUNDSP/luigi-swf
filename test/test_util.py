@@ -5,9 +5,17 @@ import luigi
 from luigi_swf import util
 
 
+class MyDependency(luigi.Task):
+
+    dt = luigi.DateParameter()
+
+
 class MyTask(luigi.Task):
 
     dt = luigi.DateParameter()
+
+    def requires(self):
+        return MyDependency(dt=self.dt)
 
 
 def test_fullname():
@@ -39,3 +47,42 @@ def test_get_luigi_params():
 
     # Test
     assert params == {'dt': datetime.datetime(2050, 1, 1)}
+
+
+def test_get_all_tasks():
+    # Setup
+    t = MyTask(dt=datetime.datetime(2050, 1, 1))
+
+    # Execute
+    all_tasks = util.get_all_tasks(t)
+
+    # Test
+    expected = {
+        'MyDependency(dt=2050-01-01 00:00:00)': {
+            'class': ('test_util', 'MyDependency'),
+            'task_family': 'MyDependency',
+            'deps': [],
+            'task_list': 'default',
+            'params': '{"dt": "2050-01-01T00:00:00"}',
+            'retries': 0,
+            'heartbeat_timeout': 'NONE',
+            'start_to_close_timeout': 'NONE',
+            'schedule_to_start_timeout': 300,
+            'schedule_to_close_timeout': 'NONE',
+            'is_wrapper': False,
+        },
+        'MyTask(dt=2050-01-01 00:00:00)': {
+            'class': ('test_util', 'MyTask'),
+            'task_family': 'MyTask',
+            'deps': ['MyDependency(dt=2050-01-01 00:00:00)'],
+            'task_list': 'default',
+            'params': '{"dt": "2050-01-01T00:00:00"}',
+            'retries': 0,
+            'heartbeat_timeout': 'NONE',
+            'start_to_close_timeout': 'NONE',
+            'schedule_to_start_timeout': 300,
+            'schedule_to_close_timeout': 'NONE',
+            'is_wrapper': False,
+        }
+    }
+    assert all_tasks == expected
