@@ -1,6 +1,4 @@
 from collections import Counter
-import cPickle as pickle
-import datetime
 import json
 import logging
 import os
@@ -8,18 +6,16 @@ import os.path
 import pprint
 import signal
 from subprocess import call
-import sys
 from time import sleep
 import traceback
 
-import arrow
 import boto.swf.layer2 as swf
 import daemon
 import luigi.configuration
 from six import iteritems
 
 from .util import default_log_format, dthandler, kill_from_pid_file, \
-    SingleWaitingLockPidFile, get_all_tasks, get_class
+    SingleWaitingLockPidFile, get_all_tasks, get_class, dt_from_iso
 
 
 logger = logging.getLogger(__name__)
@@ -101,7 +97,7 @@ class LuigiSwfDecider(swf.Decider):
             if param_name == 'pool':
                 continue
             if isinstance(param_cls, luigi.DateParameter):
-                kwargs[param_name] = arrow.get(wf_params[param_name])
+                kwargs[param_name] = dt_from_iso(wf_params[param_name])
             else:
                 kwargs[param_name] = wf_params[param_name]
         wf_task = wf_cls(**kwargs)
@@ -232,9 +228,16 @@ class LuigiSwfDecider(swf.Decider):
 
     def _schedule_activities(self, state, decisions, version):
         scheduled_count = 0
+        running_mutexes = []
         for task_id, task in state['runnables']:
             if task_id in state['unretryables']:
                 continue
+            if hasattr(task, 'swf_running_mutex'):
+                # These tasks want to run one-at-a-time per workflow execution.
+                running_mutex = getattr(task, 'swf_running_mutex')
+                if running_mutex in running_mutexes:
+                    continue
+                running_mutexes.append(running_mutex)
             scheduled_count += 1
             start_to_close = task['start_to_close_timeout']
             schedule_to_start = task['schedule_to_start_timeout']
@@ -389,7 +392,7 @@ class DeciderServer(object):
                 try:
                     logger.debug('DeciderServer().start(), decider.run()')
                     decider.run(self.identity)
-                except Exception as ex:
+                except Exception:
                     tb = traceback.format_exc()
                     logger.error('DeciderServer().start(), error:\n%s', tb)
                 sleep(0.001 * seconds)

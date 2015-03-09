@@ -1,6 +1,5 @@
 import json
 import logging
-import cPickle as pickle
 import pprint
 
 import boto.swf.layer2 as swf

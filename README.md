@@ -1,6 +1,8 @@
 luigi-swf
 =========
 
+[![Circle CI](https://circleci.com/gh/RUNDSP/luigi-swf.svg?style=svg)](https://circleci.com/gh/RUNDSP/luigi-swf)
+
 [Spotify's Luigi](https://github.com/spotify/luigi) + [Amazon's Simple Workflow Service (SWF)](http://aws.amazon.com/swf/) integration
 
 ## Examples
@@ -23,6 +25,8 @@ pip install luigi-swf
 
 ## Changelog
 
+* 0.11.1: add optional --task-list flag when starting workers. This used to be
+in the Luigi config file.
 * 0.11: register_activity_worker() now takes the full SWF activity object as an
 argument (instead of just the activity ID). also, register_activity_worker() is
 called before complete().
