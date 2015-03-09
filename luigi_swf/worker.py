@@ -72,7 +72,7 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 task_completed = task.complete()
             else:
                 task_completed = False
-        except Exception, error:
+        except Exception as error:
             tb = traceback.format_exc()
             if task is not None:
                 try:

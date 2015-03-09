@@ -70,6 +70,7 @@ def test_get_all_tasks():
             'schedule_to_start_timeout': 300,
             'schedule_to_close_timeout': 'NONE',
             'is_wrapper': False,
+            'running_mutex': None,
         },
         'MyTask(dt=2050-01-01 00:00:00)': {
             'class': ('test_util', 'MyTask'),
@@ -83,6 +84,7 @@ def test_get_all_tasks():
             'schedule_to_start_timeout': 300,
             'schedule_to_close_timeout': 'NONE',
             'is_wrapper': False,
+            'running_mutex': None,
         }
     }
     assert all_tasks == expected
