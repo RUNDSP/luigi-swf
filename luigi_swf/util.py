@@ -15,7 +15,7 @@ hours = 60 * minutes
 
 
 # http://stackoverflow.com/a/2680060/1118576
-dthandler = lambda obj: (dt_to_iso(obj)
+dthandler = lambda obj: (obj.strftime('%Y-%m-%d')
                          if isinstance(obj, datetime.datetime)
                          or isinstance(obj, datetime.date)
                          else None)
@@ -171,12 +171,8 @@ def get_all_tasks(task, include_obj=False):
     return tasks
 
 
-def dt_to_iso(dt):
-    return dt.strftime("%Y-%m-%dT%H:%M:%S")
-
-
 def dt_from_iso(iso):
-    return datetime.datetime.strptime(iso, "%Y-%m-%dT%H:%M:%S")
+    return datetime.date(*map(int, iso.split('-')))
 
 
 if __name__ == "__main__":
