@@ -237,7 +237,7 @@ class LuigiSwfDecider(swf.Decider):
                 continue
             if task['running_mutex'] is not None:
                 # These tasks want to run one-at-a-time per workflow execution.
-                if task['running_mutex'] in running_mutexes:
+                if task['running_mutex'] in state['running_mutexes']:
                     continue
                 state['running_mutexes'].add(task['running_mutex'])
             scheduled_count += 1
