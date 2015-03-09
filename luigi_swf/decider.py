@@ -228,9 +228,16 @@ class LuigiSwfDecider(swf.Decider):
 
     def _schedule_activities(self, state, decisions, version):
         scheduled_count = 0
+        running_mutexes = []
         for task_id, task in state['runnables']:
             if task_id in state['unretryables']:
                 continue
+            if hasattr(task, 'swf_running_mutex'):
+                # These tasks want to run one-at-a-time per workflow execution.
+                running_mutex = getattr(task, 'swf_running_mutex')
+                if running_mutex in running_mutexes:
+                    continue
+                running_mutexes.append(running_mutex)
             scheduled_count += 1
             start_to_close = task['start_to_close_timeout']
             schedule_to_start = task['schedule_to_start_timeout']
