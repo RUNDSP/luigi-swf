@@ -3,7 +3,7 @@ from setuptools import setup
 
 setup(
     name='luigi-swf',
-    version='0.11.1',
+    version='0.12',
     url='https://github.com/RUNDSP/luigi_swf',
     license='Apache Software License',
     install_requires=[
