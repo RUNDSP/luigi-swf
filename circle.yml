@@ -1,6 +1,9 @@
 dependencies:
   override:
     - pip install tox
+    - sudo apt-add-repository -y ppa:fkrull/deadsnakes
+    - sudo apt-get update
+    - sudo apt-get install python3.3
 test:
   override:
     - tox
