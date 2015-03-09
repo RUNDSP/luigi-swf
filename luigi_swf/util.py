@@ -3,13 +3,11 @@ import json
 from importlib import import_module
 import os
 import signal
-from subprocess import check_output
 from time import sleep
 
 import arrow
 import luigi
 import pidfile
-from six import print_
 
 
 # http://stackoverflow.com/a/2680060/1118576

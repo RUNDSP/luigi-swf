@@ -1,6 +1,4 @@
 from collections import Counter
-import cPickle as pickle
-import datetime
 import json
 import logging
 import os
@@ -8,7 +6,6 @@ import os.path
 import pprint
 import signal
 from subprocess import call
-import sys
 from time import sleep
 import traceback
 
@@ -389,7 +386,7 @@ class DeciderServer(object):
                 try:
                     logger.debug('DeciderServer().start(), decider.run()')
                     decider.run(self.identity)
-                except Exception as ex:
+                except Exception:
                     tb = traceback.format_exc()
                     logger.error('DeciderServer().start(), error:\n%s', tb)
                 sleep(0.001 * seconds)
