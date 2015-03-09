@@ -161,6 +161,7 @@ def get_all_tasks(task, include_obj=False):
             'schedule_to_start_timeout': schedule_to_start,
             'schedule_to_close_timeout': schedule_to_close,
             'is_wrapper': isinstance(task, luigi.WrapperTask),
+            'running_mutex': getattr(task, 'swf_running_mutex', None),
         }
     }
     if include_obj:
