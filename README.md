@@ -25,6 +25,7 @@ pip install luigi-swf
 
 ## Changelog
 
+* 0.12.3: New `swf_running_mutex` property on tasks. Set this to a string indicating the name of a mutex to enforce one-at-a-time scheduling per workflow execution. Also removes dependency on arrow.
 * 0.11.1: add optional --task-list flag when starting workers. This used to be
 in the Luigi config file.
 * 0.11: register_activity_worker() now takes the full SWF activity object as an
