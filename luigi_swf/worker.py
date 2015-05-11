@@ -80,6 +80,8 @@ class LuigiSwfWorker(swf.ActivityWorker):
                 except:
                     message = ('on_failure() failed: \n' +
                                traceback.format_exc())
+            if message == None:
+                message = '(no message)'
             logger.error('LuigiSwfWorker().run(), %s, error:\n%s',
                          activity_task['activityId'], tb)
             details = (tb + '\n\n\n' + str(error) + '\n\n\non_failure():\n' +
