@@ -25,13 +25,4 @@ pip install luigi-swf
 
 ## Changelog
 
-* 0.12.5: New `swf_running_mutex` property on tasks. Set this to a string indicating the name of a mutex to enforce one-at-a-time scheduling per workflow execution. Also removes dependency on arrow.
-* 0.11.1: add optional --task-list flag when starting workers. This used to be
-in the Luigi config file.
-* 0.11: register_activity_worker() now takes the full SWF activity object as an
-argument (instead of just the activity ID). also, register_activity_worker() is
-called before complete().
-* 0.10: added optional free-form identity strings to deciders and activity
-workers. Activity workers previously provided the worker index as the identity,
-but now the worker index is appended to the given identity string.
-* 0.9: added "retry" signal (signal name is "retry", input is SWF Activity ID)
+See [Releases on GitHub](./releases)
