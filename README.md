@@ -25,4 +25,4 @@ pip install luigi-swf
 
 ## Changelog
 
-See [Releases on GitHub](./releases)
+See [Releases on GitHub](https://github.com/RUNDSP/luigi-swf)
