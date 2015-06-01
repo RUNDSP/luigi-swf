@@ -1,6 +1,7 @@
 import argparse
 
 import boto.ec2.cloudwatch
+from boto.ec2.cloudwatch.alarm import MetricAlarm
 
 
 _get_cw_result = None
@@ -18,19 +19,28 @@ cw_alarm_prefix = '(luigi-swf) '
 
 class LuigiSWFAlarm(object):
 
-    def query_cw_alarm(self, task):
-        alarms = get_cw().describe_alarms(alarm_names=[self.alarm_name()])
-        if len(alarms) > 0:
-            return alarms[0]
-
     def alarm_name(self, task):
         raise NotImplementedError
 
-    def activate(self):
-        pass
+    def alarm_params(self, task):
+        raise NotImplementedError
 
-    def deactivate(self):
-        pass
+    def create_alarm_obj(self, task):
+        alarm = MetricAlarm(
+            name=self.alarm_name(),
+            **self.alarm_params())
+        return alarm
+
+    def update(self, task):
+        alarm = self.create_alarm_obj(task)
+        get_cw().put_metric_alarm(alarm)
+        return alarm
+
+    def activate(self, task):
+        get_cw().enable_alarm_actions([self.alarm_name])
+
+    def deactivate(self, task):
+        get_cw().disable_alarm_actions([self.alarm_name])
 
 
 class HasNotCompletedAlarm(LuigiSWFAlarm):
@@ -106,7 +116,7 @@ class WFTimedOutAlarm(TimedOutAlarm):
             m=task.task_module)
 
 
-def cw_update(tasks):
+def cw_update_workflow(wf_task):
     pass
 
 
