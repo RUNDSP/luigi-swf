@@ -1,5 +1,6 @@
 import collections
 import logging
+from time import sleep
 
 import boto.ec2.cloudwatch
 from boto.ec2.cloudwatch.alarm import MetricAlarm
@@ -48,6 +49,7 @@ class LuigiSWFAlarm(object):
         domain = config.get('swfscheduler', 'domain')
         alarm = self.create_alarm_obj(task, domain)
         get_cw().put_metric_alarm(alarm)
+        sleep(0.1)
         return alarm
 
     def activate(self, task):
@@ -259,6 +261,7 @@ def cw_update_task(task, return_deletes=False):
     else:
         for b in batch(deletes, 10):
             get_cw().delete_alarms(list(b))
+            sleep(0.1)
 
 
 def cw_update_workflow(task, updated=set()):
@@ -277,4 +280,5 @@ def cw_update_workflow(task, updated=set()):
     # Delete missing alarms.
     for b in batch(deletes, 10):
         get_cw().delete_alarms(list(b))
+        sleep(0.1)
     return updated
