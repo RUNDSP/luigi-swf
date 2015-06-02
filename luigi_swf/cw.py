@@ -1,8 +1,12 @@
-import argparse
+import logging
 
 import boto.ec2.cloudwatch
 from boto.ec2.cloudwatch.alarm import MetricAlarm
+import luigi
 import luigi.configuration
+
+
+logger = logging.getLogger(__name__)
 
 
 _get_cw_result = None
@@ -208,18 +212,64 @@ class WFTimedOutAlarm(TimedOutAlarm):
         }
 
 
-def cw_update_workflow(wf_task):
-    pass
+def batch(iterable, n=1):
+    """
+    http://stackoverflow.com/a/8290508/1118576
+    """
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
 
 
-def cw_on(task):
-    pass
+def cw_update_task(task, return_deletes=False):
+    f, to, nc, wf, wto, wnc = None, None, None, None, None, None
+    for alarm in getattr(task, 'swf_cw_alarms', []):
+        alarm.update(task)
+        if isinstance(alarm, TaskFailedAlarm):
+            f = alarm
+        elif isinstance(alarm, TaskTimedOutAlarm):
+            to = alarm
+        elif isinstance(alarm, TaskHasNotCompletedAlarm):
+            nc = alarm
+        elif isinstance(alarm, WFFailedAlarm):
+            wf = alarm
+        elif isinstance(alarm, WFTimedOutAlarm):
+            wto = alarm
+        elif isinstance(alarm, WFHasNotCompletedAlarm):
+            wnc = alarm
+        else:
+            logger.warn("Won't be able to delete this alarm when it's "
+                        "unused: %s", alarm.name)
+    deletes = []
+    if f is None:
+        deletes.append(TaskFailedAlarm([]).alarm_name(task))
+    if to is None:
+        deletes.append(TaskTimedOutAlarm([]).alarm_name(task))
+    if nc is None:
+        deletes.append(TaskHasNotCompletedAlarm([], 1).alarm_name(task))
+    if wf is None:
+        deletes.append(WFFailedAlarm([]).alarm_name(task))
+    if wto is None:
+        deletes.append(WFTimedOutAlarm([]).alarm_name(task))
+    if wnc is None:
+        deletes.append(WFHasNotCompletedAlarm([], 1).alarm_name(task))
+    if return_deletes:
+        return deletes
+    else:
+        for b in batch(deletes, 10):
+            get_cw().delete_alarms(list(b))
 
 
-def cw_off(task):
-    pass
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Control CloudWatch monitoring')
-    # TODO
+def cw_update_workflow(task, updated=set()):
+    deletes = []
+    # Update present alarms.
+    if not isinstance(task, luigi.WrapperTask) \
+            and task.task_family not in updated:
+        deletes += cw_update_task(task, return_deletes=True)
+        updated.add(task.task_family)
+    for t in task.requires():
+        updated = cw_update_workflow(t, updated)
+    # Delete missing alarms.
+    for b in batch(deletes, 10):
+        get_cw().delete_alarms(list(b))
+    return updated
