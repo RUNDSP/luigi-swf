@@ -93,6 +93,7 @@ class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
             'evaluation_periods': self.min_duration,
             'comparison': '<=',
             'threshold': 0,
+            'insufficient_data_actions': self.sns_topic_arns,
         }
 
 
@@ -159,6 +160,7 @@ class WFHasNotCompletedAlarm(HasNotCompletedAlarm):
             'evaluation_periods': self.min_duration,
             'comparison': '<=',
             'threshold': 0,
+            'insufficient_data_actions': self.sns_topic_arns,
         }
 
 
