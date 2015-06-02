@@ -30,7 +30,7 @@ class LuigiSWFAlarm(object):
 
     def create_alarm_obj(self, task, domain):
         alarm = MetricAlarm(
-            name=self.alarm_name(),
+            name=self.alarm_name(task),
             alarm_actions=self.sns_topic_arns,
             namespace='AWS/SWF',
             period=60,
@@ -46,10 +46,10 @@ class LuigiSWFAlarm(object):
         return alarm
 
     def activate(self, task):
-        get_cw().enable_alarm_actions([self.alarm_name()])
+        get_cw().enable_alarm_actions([self.alarm_name(task)])
 
     def deactivate(self, task):
-        get_cw().disable_alarm_actions([self.alarm_name()])
+        get_cw().disable_alarm_actions([self.alarm_name(task)])
 
 
 class HasNotCompletedAlarm(LuigiSWFAlarm):
