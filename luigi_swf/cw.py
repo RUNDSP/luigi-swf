@@ -1,3 +1,4 @@
+import collections
 import logging
 
 import boto.ec2.cloudwatch
@@ -267,8 +268,12 @@ def cw_update_workflow(task, updated=set()):
             and task.task_family not in updated:
         deletes += cw_update_task(task, return_deletes=True)
         updated.add(task.task_family)
-    for t in task.requires():
-        updated = cw_update_workflow(t, updated)
+    req = task.requires()
+    if isinstance(req, collections.Iterable):
+        for t in req:
+            updated = cw_update_workflow(t, updated)
+    elif isinstance(req, luigi.Task):
+        updated = cw_update_workflow(req, updated)
     # Delete missing alarms.
     for b in batch(deletes, 10):
         get_cw().delete_alarms(list(b))
