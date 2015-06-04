@@ -42,6 +42,8 @@ cw_alarm_prefix = '(luigi-swf) '
 class LuigiSWFAlarm(object):
 
     sns_topic_arns = NotImplemented
+    evaluation_periods = NotImplemented
+    period = NotImplemented
 
     def alarm_name(self, task):
         raise NotImplementedError
@@ -54,7 +56,8 @@ class LuigiSWFAlarm(object):
             name=self.alarm_name(task),
             alarm_actions=self.sns_topic_arns,
             namespace='AWS/SWF',
-            period=60,
+            period=self.period,
+            evaluation_periods=self.evaluation_periods,
             statistic='Sum',
             **self.alarm_params(task, domain))
         return alarm
@@ -64,7 +67,6 @@ class LuigiSWFAlarm(object):
         domain = config.get('swfscheduler', 'domain')
         alarm = self.create_alarm_obj(task, domain)
         get_cw().put_metric_alarm(alarm)
-        sleep(0.1)
         return alarm
 
     def activate(self, task):
@@ -76,25 +78,30 @@ class LuigiSWFAlarm(object):
 
 class HasNotCompletedAlarm(LuigiSWFAlarm):
 
-    def __init__(self, sns_topic_arns, min_duration):
+    def __init__(self, sns_topic_arns, period, evaluation_periods=1):
         self.sns_topic_arns = sns_topic_arns
-        self.min_duration = min_duration
+        self.period = period
+        self.evaluation_periods = evaluation_periods
 
 
 class FailedAlarm(LuigiSWFAlarm):
 
-    def __init__(self, sns_topic_arns, min_failures=1, period=1):
+    def __init__(self, sns_topic_arns, min_failures=1, period=60,
+                 evaluation_periods=1):
         self.sns_topic_arns = sns_topic_arns
         self.min_failures = min_failures
         self.period = period
+        self.evaluation_periods = evaluation_periods
 
 
 class TimedOutAlarm(LuigiSWFAlarm):
 
-    def __init__(self, sns_topic_arns, min_timeouts=1, period=1):
+    def __init__(self, sns_topic_arns, min_timeouts=1, period=60,
+                 evaluation_periods=1):
         self.sns_topic_arns = sns_topic_arns
         self.min_timeouts = min_timeouts
         self.period = period
+        self.evaluation_periods = evaluation_periods
 
 
 class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
@@ -112,7 +119,6 @@ class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksCompleted',
-            'evaluation_periods': self.min_duration,
             'comparison': '<=',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
@@ -135,7 +141,6 @@ class TaskFailedAlarm(FailedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksFailed',
-            'evaluation_periods': self.period,
             'comparison': '>=',
             'threshold': self.min_failures,
         }
@@ -157,7 +162,6 @@ class TaskTimedOutAlarm(TimedOutAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksTimedOut',
-            'evaluation_periods': self.period,
             'comparison': '>=',
             'threshold': self.min_timeouts,
         }
@@ -179,7 +183,6 @@ class WFHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsCompleted',
-            'evaluation_periods': self.min_duration,
             'comparison': '<=',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
@@ -202,7 +205,6 @@ class WFFailedAlarm(FailedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsFailed',
-            'evaluation_periods': self.period,
             'comparison': '>=',
             'threshold': self.min_failures,
         }
@@ -224,7 +226,6 @@ class WFTimedOutAlarm(TimedOutAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsTimedOut',
-            'evaluation_periods': self.period,
             'comparison': '>=',
             'threshold': self.min_timeouts,
         }
