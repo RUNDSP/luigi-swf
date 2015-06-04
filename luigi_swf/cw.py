@@ -276,10 +276,17 @@ def get_workflow_alarm_puts(task):
     return puts
 
 
+def n2e(l):
+    """None-to-empty (list)"""
+    if l is None:
+        return []
+    return l
+
+
 _alarm_equals_conditions = [
-    lambda a: set(a[0].alarm_actions) == set(a[1].alarm_actions),
-    lambda a: (set(a[0].insufficient_data_actions) ==
-               set(a[1].insufficient_data_actions)),
+    lambda a: set(n2e(a[0].alarm_actions)) == set(n2e(a[1].alarm_actions)),
+    lambda a: (set(n2e(a[0].insufficient_data_actions)) ==
+               set(n2e(a[1].insufficient_data_actions))),
     lambda a: a[0].namespace == a[1].namespace,
     lambda a: a[0].period == a[1].period,
     lambda a: a[0].evaluation_periods == a[1].evaluation_periods,
