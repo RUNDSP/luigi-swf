@@ -1,4 +1,3 @@
-import collections
 import logging
 from time import sleep
 
@@ -6,6 +5,7 @@ import boto.ec2.cloudwatch
 from boto.ec2.cloudwatch.alarm import MetricAlarm
 import luigi
 import luigi.configuration
+from luigi.task import flatten
 from six import iteritems
 
 
@@ -268,9 +268,7 @@ def get_workflow_alarm_puts(task):
     # Get alarm changes for all tasks.
     if not isinstance(task, luigi.WrapperTask):
         puts += get_task_alarm_puts(task)
-    req = task.requires()
-    if not isinstance(req, collections.Iterable):
-        req = [req]
+    req = flatten(task.requires())
     for t in req:
         puts += get_workflow_alarm_puts(t)
     return puts
