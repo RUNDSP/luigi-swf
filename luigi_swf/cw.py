@@ -21,6 +21,21 @@ def get_cw():
     return _get_cw_result
 
 
+def batch(iterable, n=1):
+    """
+    http://stackoverflow.com/a/8290508/1118576
+    """
+    l = len(iterable)
+    for ndx in range(0, l, n):
+        yield iterable[ndx:min(ndx + n, l)]
+
+
+def delete_alarms(alarms):
+    for b in batch(alarms, 100):
+        get_cw().delete_alarms(list(b))
+        sleep(0.2)
+
+
 cw_alarm_prefix = '(luigi-swf) '
 
 
@@ -215,15 +230,6 @@ class WFTimedOutAlarm(TimedOutAlarm):
         }
 
 
-def batch(iterable, n=1):
-    """
-    http://stackoverflow.com/a/8290508/1118576
-    """
-    l = len(iterable)
-    for ndx in range(0, l, n):
-        yield iterable[ndx:min(ndx + n, l)]
-
-
 def cw_update_task(task, return_deletes=False):
     f, to, nc, wf, wto, wnc = None, None, None, None, None, None
     for alarm in getattr(task, 'swf_cw_alarms', []):
@@ -259,9 +265,7 @@ def cw_update_task(task, return_deletes=False):
     if return_deletes:
         return deletes
     else:
-        for b in batch(deletes, 10):
-            get_cw().delete_alarms(list(b))
-            sleep(0.1)
+        delete_alarms(deletes)
 
 
 def cw_update_workflow(task, updated=set()):
@@ -270,6 +274,7 @@ def cw_update_workflow(task, updated=set()):
     if not isinstance(task, luigi.WrapperTask) \
             and task.task_family not in updated:
         deletes += cw_update_task(task, return_deletes=True)
+        sleep(0.01)
         updated.add(task.task_family)
     req = task.requires()
     if isinstance(req, collections.Iterable):
@@ -278,7 +283,5 @@ def cw_update_workflow(task, updated=set()):
     elif isinstance(req, luigi.Task):
         updated = cw_update_workflow(req, updated)
     # Delete missing alarms.
-    for b in batch(deletes, 10):
-        get_cw().delete_alarms(list(b))
-        sleep(0.1)
+    delete_alarms(deletes)
     return updated
