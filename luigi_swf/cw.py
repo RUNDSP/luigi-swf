@@ -320,7 +320,7 @@ def cw_update_workflows(wf_tasks):
         alarm, task = put
         prev_alarm = prev_alarms.get(alarm.alarm_name(task), None)
         if alarm.update(task, prev_alarm):
-            sleep(0.01)
+            sleep(0.02)
     logger.info('deleting not-needed alarms')
     deletes = [a for a in prev_alarms.keys()
                if a not in puts and a.startswith(cw_alarm_prefix)]
