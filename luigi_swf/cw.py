@@ -275,12 +275,11 @@ def get_task_changes(task):
     return puts, deletes
 
 
-def get_workflow_changes(task, updated=set()):
+def get_workflow_changes(task):
     deletes = []
     puts = []
     # Get alarm changes for all tasks.
-    if not isinstance(task, luigi.WrapperTask) \
-            and task.task_family not in updated:
+    if not isinstance(task, luigi.WrapperTask):
         t_puts, t_deletes = get_task_changes(task)
         puts += t_puts
         deletes += t_deletes
@@ -288,7 +287,7 @@ def get_workflow_changes(task, updated=set()):
     if not isinstance(req, collections.Iterable):
         req = [req]
     for t in req:
-        w_puts, w_deletes = get_workflow_changes(t, updated)
+        w_puts, w_deletes = get_workflow_changes(t)
         puts += w_puts
         deletes += w_deletes
     return puts, deletes
