@@ -301,13 +301,15 @@ def alarms_equal(a1, a2):
     return all(map(lambda f: f(a), _alarm_equals_conditions))
 
 
-def cw_update_workflow(task):
+def cw_update_workflow(wf_tasks):
     if len(cw_alarm_prefix) == 0:
         raise RuntimeError('no cw_alarm_prefix. would delete all alarms.')
     logger.info('getting existing alarms')
     prev_alarms = get_existing_alarms()
     logger.info('getting alarm changes from workflow')
-    puts = get_workflow_alarm_puts(task)
+    puts = []
+    for wf_task in wf_tasks:
+        puts += get_workflow_alarm_puts(wf_task)
     puts = dict(puts)
     logger.info('updating alarms')
     for alarm_name, put in iteritems(puts):
