@@ -259,7 +259,6 @@ class WFTimedOutAlarm(TimedOutAlarm):
 def get_task_alarm_puts(task):
     puts = []
     for alarm in getattr(task, 'swf_cw_alarms', []):
-        alarm.update(task)
         puts.append((alarm.alarm_name(task), (alarm, task)))
     return puts
 
