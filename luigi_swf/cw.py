@@ -33,11 +33,25 @@ def batch(iterable, n=1):
 
 def delete_alarms(alarms):
     for b in batch(alarms, 100):
-        get_cw().delete_alarms(list(b))
+        deletes = list(b)
+        logger.debug('delete_alarms(), deleting alarms %s', deletes)
+        get_cw().delete_alarms(deletes)
         sleep(0.2)
 
 
 cw_alarm_prefix = '(luigi-swf) '
+
+
+def get_existing_alarms():
+    r = get_cw().describe_alarms(alarm_name_prefix=cw_alarm_prefix)
+    alarms = dict((a.name, a) for a in r)
+    while r.next_token is not None:
+        sleep(0.02)
+        r = get_cw().describe_alarms(alarm_name_prefix=cw_alarm_prefix,
+                                     next_token=r.next_token)
+        for a in r:
+            alarms[a.name] = a
+    return alarms
 
 
 class LuigiSWFAlarm(object):
@@ -63,12 +77,16 @@ class LuigiSWFAlarm(object):
             **self.alarm_params(task, domain))
         return alarm
 
-    def update(self, task):
+    def update(self, task, prev_alarm=None):
         config = luigi.configuration.get_config()
         domain = config.get('swfscheduler', 'domain')
         alarm = self.create_alarm_obj(task, domain)
-        get_cw().put_metric_alarm(alarm)
-        return alarm
+        if prev_alarm is not None and alarms_equal(alarm, prev_alarm):
+            return False
+        else:
+            logger.debug("updating alarm '%s'", alarm.name)
+            get_cw().put_metric_alarm(alarm)
+            return True
 
     def activate(self, task):
         get_cw().enable_alarm_actions([self.alarm_name(task)])
@@ -238,71 +256,62 @@ class WFTimedOutAlarm(TimedOutAlarm):
         }
 
 
-def get_task_changes(task):
+def get_task_alarm_puts(task):
     puts = []
-    f, to, nc, wf, wto, wnc = None, None, None, None, None, None
     for alarm in getattr(task, 'swf_cw_alarms', []):
         alarm.update(task)
         puts.append((alarm.alarm_name(task), (alarm, task)))
-        if isinstance(alarm, TaskFailedAlarm):
-            f = alarm
-        elif isinstance(alarm, TaskTimedOutAlarm):
-            to = alarm
-        elif isinstance(alarm, TaskHasNotCompletedAlarm):
-            nc = alarm
-        elif isinstance(alarm, WFFailedAlarm):
-            wf = alarm
-        elif isinstance(alarm, WFTimedOutAlarm):
-            wto = alarm
-        elif isinstance(alarm, WFHasNotCompletedAlarm):
-            wnc = alarm
-        else:
-            logger.warn("Won't be able to delete this alarm when it's "
-                        "unused: %s", alarm.name)
-    deletes = []
-    if f is None:
-        deletes.append(TaskFailedAlarm([]).alarm_name(task))
-    if to is None:
-        deletes.append(TaskTimedOutAlarm([]).alarm_name(task))
-    if nc is None:
-        deletes.append(TaskHasNotCompletedAlarm([], 1).alarm_name(task))
-    if wf is None:
-        deletes.append(WFFailedAlarm([]).alarm_name(task))
-    if wto is None:
-        deletes.append(WFTimedOutAlarm([]).alarm_name(task))
-    if wnc is None:
-        deletes.append(WFHasNotCompletedAlarm([], 1).alarm_name(task))
-    return puts, deletes
+    return puts
 
 
-def get_workflow_changes(task):
-    deletes = []
+def get_workflow_alarm_puts(task):
     puts = []
     # Get alarm changes for all tasks.
     if not isinstance(task, luigi.WrapperTask):
-        t_puts, t_deletes = get_task_changes(task)
-        puts += t_puts
-        deletes += t_deletes
+        puts += get_task_alarm_puts(task)
     req = task.requires()
     if not isinstance(req, collections.Iterable):
         req = [req]
     for t in req:
-        w_puts, w_deletes = get_workflow_changes(t)
-        puts += w_puts
-        deletes += w_deletes
-    return puts, deletes
+        puts += get_workflow_alarm_puts(t)
+    return puts
+
+
+_alarm_equals_conditions = [
+    lambda a: set(a[0].alarm_actions) == set(a[1].alarm_actions),
+    lambda a: (set(a[0].insufficient_data_actions) ==
+               set(a[1].insufficient_data_actions)),
+    lambda a: a[0].namespace == a[1].namespace,
+    lambda a: a[0].period == a[1].period,
+    lambda a: a[0].evaluation_periods == a[1].evaluation_periods,
+    lambda a: a[0].statistic == a[1].statistic,
+    lambda a: a[0].comparison == a[1].comparison,
+    lambda a: a[0].threshold == a[1].threshold,
+    lambda a: a[0].metric == a[1].metric,
+    lambda a: a[0].dimensions == a[1].dimensions,
+]
+
+
+def alarms_equal(a1, a2):
+    a = (a1, a2)
+    return all(map(lambda f: f(a), _alarm_equals_conditions))
 
 
 def cw_update_workflow(task):
-    puts, deletes = get_workflow_changes(task)
+    if len(cw_alarm_prefix) == 0:
+        raise RuntimeError('no cw_alarm_prefix. would delete all alarms.')
+    logger.info('getting existing alarms')
+    prev_alarms = get_existing_alarms()
+    logger.info('getting alarm changes from workflow')
+    puts = get_workflow_alarm_puts(task)
     puts = dict(puts)
+    logger.info('updating alarms')
     for alarm_name, put in iteritems(puts):
-        # TODO: select existing ones first in batch
-        #       and don't update unless necessary.
         alarm, task = put
-        alarm.update(task)
-        sleep(0.01)
-    # TODO: also delete alarms which aren't in puts (source task is missing)
-    #       based on prefix-based DescribeAlarms call from the above TODO.
-    deletes = set(deletes)
+        prev_alarm = prev_alarms.get(alarm.alarm_name(task), None)
+        if alarm.update(task, prev_alarm):
+            sleep(0.01)
+    logger.info('deleting not-needed alarms')
+    deletes = (a for a in prev_alarms.keys()
+               if a not in puts and a.startswith(cw_alarm_prefix))
     delete_alarms(deletes)
