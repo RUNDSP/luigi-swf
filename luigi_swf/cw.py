@@ -297,12 +297,20 @@ def alarms_equal(a1, a2):
     return all(map(lambda f: f(a), _alarm_equals_conditions))
 
 
-def cw_update_workflow(wf_tasks):
+def cw_update_workflows(wf_tasks):
+    """Synchronize our defined alarms with CloudWatch
+
+    All workflow tasks for an AWS account should be provided at once
+    because this deletes alarms it sees for which we don't have tasks.
+
+    :param wf_tasks: workflow tasks
+    :type wf_tasks: list of Luigi tasks
+    """
     if len(cw_alarm_prefix) == 0:
         raise RuntimeError('no cw_alarm_prefix. would delete all alarms.')
     logger.info('getting existing alarms')
     prev_alarms = get_existing_alarms()
-    logger.info('getting alarm changes from workflow')
+    logger.info('getting alarm changes from workflows')
     puts = []
     for wf_task in wf_tasks:
         puts += get_workflow_alarm_puts(wf_task)
