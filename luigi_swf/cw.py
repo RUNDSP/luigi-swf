@@ -6,6 +6,7 @@ import boto.ec2.cloudwatch
 from boto.ec2.cloudwatch.alarm import MetricAlarm
 import luigi
 import luigi.configuration
+from six import iteritems
 
 
 logger = logging.getLogger(__name__)
@@ -79,29 +80,35 @@ class LuigiSWFAlarm(object):
 class HasNotCompletedAlarm(LuigiSWFAlarm):
 
     def __init__(self, sns_topic_arns, period, evaluation_periods=1):
+        if period % 60 != 0:
+            raise ValueError('period must be multiple of 60')
         self.sns_topic_arns = sns_topic_arns
-        self.period = period
-        self.evaluation_periods = evaluation_periods
+        self.period = int(period)
+        self.evaluation_periods = int(evaluation_periods)
 
 
 class FailedAlarm(LuigiSWFAlarm):
 
     def __init__(self, sns_topic_arns, min_failures=1, period=60,
                  evaluation_periods=1):
+        if period % 60 != 0:
+            raise ValueError('period must be multiple of 60')
         self.sns_topic_arns = sns_topic_arns
         self.min_failures = min_failures
-        self.period = period
-        self.evaluation_periods = evaluation_periods
+        self.period = int(period)
+        self.evaluation_periods = int(evaluation_periods)
 
 
 class TimedOutAlarm(LuigiSWFAlarm):
 
     def __init__(self, sns_topic_arns, min_timeouts=1, period=60,
                  evaluation_periods=1):
+        if period % 60 != 0:
+            raise ValueError('period must be multiple of 60')
         self.sns_topic_arns = sns_topic_arns
         self.min_timeouts = min_timeouts
-        self.period = period
-        self.evaluation_periods = evaluation_periods
+        self.period = int(period)
+        self.evaluation_periods = int(evaluation_periods)
 
 
 class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
@@ -109,7 +116,7 @@ class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
     def alarm_name(self, task):
         return '(luigi-swf) has not completed: {t} ({m})'.format(
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -131,7 +138,7 @@ class TaskFailedAlarm(FailedAlarm):
         return '{pre}failed: {t} ({m})'.format(
             pre=cw_alarm_prefix,
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -152,7 +159,7 @@ class TaskTimedOutAlarm(TimedOutAlarm):
         return '{pre}timed out: {t} ({m})'.format(
             pre=cw_alarm_prefix,
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -173,7 +180,7 @@ class WFHasNotCompletedAlarm(HasNotCompletedAlarm):
         return '{pre}wf has not completed: {t} ({m})'.format(
             pre=cw_alarm_prefix,
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -195,7 +202,7 @@ class WFFailedAlarm(FailedAlarm):
         return '{pre}wf failed: {t} ({m})'.format(
             pre=cw_alarm_prefix,
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -216,7 +223,7 @@ class WFTimedOutAlarm(TimedOutAlarm):
         return '{pre}wf timed out: {t} ({m})'.format(
             pre=cw_alarm_prefix,
             t=task.task_family,
-            m=task.task_module)
+            m=task.task_module)[:255]
 
     def alarm_params(self, task, domain):
         return {
@@ -231,10 +238,12 @@ class WFTimedOutAlarm(TimedOutAlarm):
         }
 
 
-def cw_update_task(task, return_deletes=False):
+def get_task_changes(task):
+    puts = []
     f, to, nc, wf, wto, wnc = None, None, None, None, None, None
     for alarm in getattr(task, 'swf_cw_alarms', []):
         alarm.update(task)
+        puts.append((alarm.alarm_name(task), (alarm, task)))
         if isinstance(alarm, TaskFailedAlarm):
             f = alarm
         elif isinstance(alarm, TaskTimedOutAlarm):
@@ -263,26 +272,38 @@ def cw_update_task(task, return_deletes=False):
         deletes.append(WFTimedOutAlarm([]).alarm_name(task))
     if wnc is None:
         deletes.append(WFHasNotCompletedAlarm([], 1).alarm_name(task))
-    if return_deletes:
-        return deletes
-    else:
-        delete_alarms(deletes)
+    return puts, deletes
 
 
-def cw_update_workflow(task, updated=set()):
+def get_workflow_changes(task, updated=set()):
     deletes = []
-    # Update present alarms.
+    puts = []
+    # Get alarm changes for all tasks.
     if not isinstance(task, luigi.WrapperTask) \
             and task.task_family not in updated:
-        deletes += cw_update_task(task, return_deletes=True)
-        sleep(0.01)
-        updated.add(task.task_family)
+        t_puts, t_deletes = get_task_changes(task)
+        puts += t_puts
+        deletes += t_deletes
     req = task.requires()
-    if isinstance(req, collections.Iterable):
-        for t in req:
-            updated = cw_update_workflow(t, updated)
-    elif isinstance(req, luigi.Task):
-        updated = cw_update_workflow(req, updated)
-    # Delete missing alarms.
+    if not isinstance(req, collections.Iterable):
+        req = [req]
+    for t in req:
+        w_puts, w_deletes = get_workflow_changes(t, updated)
+        puts += w_puts
+        deletes += w_deletes
+    return puts, deletes
+
+
+def cw_update_workflow(task):
+    puts, deletes = get_workflow_changes(task)
+    puts = dict(puts)
+    for alarm_name, put in iteritems(puts):
+        # TODO: select existing ones first in batch
+        #       and don't update unless necessary.
+        alarm, task = put
+        alarm.update(task)
+        sleep(0.01)
+    # TODO: also delete alarms which aren't in puts (source task is missing)
+    #       based on prefix-based DescribeAlarms call from the above TODO.
+    deletes = set(deletes)
     delete_alarms(deletes)
-    return updated
