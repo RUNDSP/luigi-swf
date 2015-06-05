@@ -22,7 +22,9 @@ def get_cw():
 
 
 def cw_api_sleep():
-    sleep(0.1)
+    c = luigi.configuration.get_config()
+    t = c.getfloat('swfscheduler', 'cw_api_sleep', 0.2)
+    sleep(t)
 
 
 def batch(iterable, n=1):
@@ -329,6 +331,7 @@ def cw_update_workflows(wf_tasks, delete_obsolete=True):
         if alarm.update(task, prev_alarm):
             update_cnt += 1
             cw_api_sleep()
+            logger.info('- updated %s', alarm.alarm_name(task))
     logger.info('updated %s/%s alarms', update_cnt, alarm_cnt)
     if delete_obsolete:
         logger.info('deleting obsolete alarms')
