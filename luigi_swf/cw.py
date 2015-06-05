@@ -21,6 +21,10 @@ def get_cw():
     return _get_cw_result
 
 
+def cw_api_sleep():
+    sleep(0.1)
+
+
 def batch(iterable, n=1):
     """
     http://stackoverflow.com/a/8290508/1118576
@@ -35,7 +39,7 @@ def delete_alarms(alarms):
         deletes = list(b)
         logger.debug('delete_alarms(), deleting alarms %s', deletes)
         get_cw().delete_alarms(deletes)
-        sleep(0.2)
+        cw_api_sleep()
 
 
 cw_alarm_prefix = '(luigi-swf) '
@@ -45,7 +49,7 @@ def get_existing_alarms():
     r = get_cw().describe_alarms(alarm_name_prefix=cw_alarm_prefix)
     alarms = dict((a.name, a) for a in r)
     while r.next_token is not None:
-        sleep(0.02)
+        cw_api_sleep()
         r = get_cw().describe_alarms(alarm_name_prefix=cw_alarm_prefix,
                                      next_token=r.next_token)
         for a in r:
@@ -297,7 +301,7 @@ def alarms_equal(a1, a2):
     return all(map(lambda f: f(a), _alarm_equals_conditions))
 
 
-def cw_update_workflows(wf_tasks):
+def cw_update_workflows(wf_tasks, delete_obsolete=True):
     """Synchronize our defined alarms with CloudWatch
 
     All workflow tasks for an AWS account should be provided at once
@@ -316,12 +320,20 @@ def cw_update_workflows(wf_tasks):
         puts += get_workflow_alarm_puts(wf_task)
     puts = dict(puts)
     logger.info('updating alarms')
+    alarm_cnt = 0
+    update_cnt = 0
     for alarm_name, put in iteritems(puts):
         alarm, task = put
         prev_alarm = prev_alarms.get(alarm.alarm_name(task), None)
+            alarm_cnt += 1
         if alarm.update(task, prev_alarm):
-            sleep(0.02)
-    logger.info('deleting not-needed alarms')
-    deletes = [a for a in prev_alarms.keys()
-               if a not in puts and a.startswith(cw_alarm_prefix)]
-    delete_alarms(deletes)
+            update_cnt += 1
+            cw_api_sleep()
+    logger.info('updated %s/%s alarms', update_cnt, alarm_cnt)
+    if delete_obsolete:
+        logger.info('deleting obsolete alarms')
+        deletes = [a for a in prev_alarms.keys()
+                   if a not in puts and a.startswith(cw_alarm_prefix)]
+        delete_alarms(deletes)
+        logger.info('deleted %s/%s previously existing alarms',
+                    len(deletes), len(prev_alarms))
