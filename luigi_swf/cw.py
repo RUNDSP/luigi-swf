@@ -325,7 +325,7 @@ def cw_update_workflows(wf_tasks, delete_obsolete=True):
     for alarm_name, put in iteritems(puts):
         alarm, task = put
         prev_alarm = prev_alarms.get(alarm.alarm_name(task), None)
-            alarm_cnt += 1
+        alarm_cnt += 1
         if alarm.update(task, prev_alarm):
             update_cnt += 1
             cw_api_sleep()
