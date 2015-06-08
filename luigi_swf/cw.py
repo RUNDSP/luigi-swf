@@ -319,9 +319,9 @@ _alarm_equals_conditions = [
     lambda a: a[0].period == a[1].period,
     lambda a: a[0].evaluation_periods == a[1].evaluation_periods,
     lambda a: a[0].statistic == a[1].statistic,
-    lambda a: a[0].comparison == a[1].comparison,
     lambda a: (normalize_comparison(a[0].threshold) ==
                normalize_comparison(a[1].threshold)),
+    lambda a: a[0].threshold == a[1].threshold,
     lambda a: a[0].metric == a[1].metric,
     lambda a: flatten_dict_vals_equal(a[0].dimensions, a[1].dimensions),
 ]
