@@ -150,7 +150,7 @@ class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksCompleted',
-            'comparison': 'LessThanOrEqualToThreshold',
+            'comparison': '<=',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
         }
@@ -172,7 +172,7 @@ class TaskFailedAlarm(FailedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksFailed',
-            'comparison': 'GreaterThanOrEqualToThreshold',
+            'comparison': '>=',
             'threshold': self.min_failures,
         }
 
@@ -193,7 +193,7 @@ class TaskTimedOutAlarm(TimedOutAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksTimedOut',
-            'comparison': 'GreaterThanOrEqualToThreshold',
+            'comparison': '>=',
             'threshold': self.min_timeouts,
         }
 
@@ -214,7 +214,7 @@ class WFHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsCompleted',
-            'comparison': 'LessThanOrEqualToThreshold',
+            'comparison': '<=',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
         }
@@ -236,7 +236,7 @@ class WFFailedAlarm(FailedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsFailed',
-            'comparison': 'GreaterThanOrEqualToThreshold',
+            'comparison': '>=',
             'threshold': self.min_failures,
         }
 
@@ -257,7 +257,7 @@ class WFTimedOutAlarm(TimedOutAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsTimedOut',
-            'comparison': 'GreaterThanOrEqualToThreshold',
+            'comparison': '>=',
             'threshold': self.min_timeouts,
         }
 
@@ -267,6 +267,15 @@ def get_task_alarm_puts(task):
     for alarm in getattr(task, 'swf_cw_alarms', []):
         puts.append((alarm.alarm_name(task), (alarm, task)))
     return puts
+
+
+def normalize_comparison(c):
+    return {
+        '>=': 'GreaterThanOrEqualToThreshold',
+        '<=': 'LessThanOrEqualToThreshold',
+        '>': 'GreaterThanThreshold',
+        '<': 'LessThanThreshold',
+    }.get(c, c)
 
 
 def get_workflow_alarm_puts(task):
@@ -311,7 +320,8 @@ _alarm_equals_conditions = [
     lambda a: a[0].evaluation_periods == a[1].evaluation_periods,
     lambda a: a[0].statistic == a[1].statistic,
     lambda a: a[0].comparison == a[1].comparison,
-    lambda a: a[0].threshold == a[1].threshold,
+    lambda a: (normalize_comparison(a[0].threshold) ==
+               normalize_comparison(a[1].threshold)),
     lambda a: a[0].metric == a[1].metric,
     lambda a: flatten_dict_vals_equal(a[0].dimensions, a[1].dimensions),
 ]
