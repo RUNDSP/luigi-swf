@@ -1,3 +1,4 @@
+import collections
 import logging
 from time import sleep
 
@@ -149,7 +150,7 @@ class TaskHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksCompleted',
-            'comparison': '<=',
+            'comparison': 'LessThanOrEqualToThreshold',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
         }
@@ -171,7 +172,7 @@ class TaskFailedAlarm(FailedAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksFailed',
-            'comparison': '>=',
+            'comparison': 'GreaterThanOrEqualToThreshold',
             'threshold': self.min_failures,
         }
 
@@ -192,7 +193,7 @@ class TaskTimedOutAlarm(TimedOutAlarm):
                 'ActivityTypeVersion': 'unspecified',
             },
             'metric': 'ActivityTasksTimedOut',
-            'comparison': '>=',
+            'comparison': 'GreaterThanOrEqualToThreshold',
             'threshold': self.min_timeouts,
         }
 
@@ -213,7 +214,7 @@ class WFHasNotCompletedAlarm(HasNotCompletedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsCompleted',
-            'comparison': '<=',
+            'comparison': 'LessThanOrEqualToThreshold',
             'threshold': 0,
             'insufficient_data_actions': self.sns_topic_arns,
         }
@@ -235,7 +236,7 @@ class WFFailedAlarm(FailedAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsFailed',
-            'comparison': '>=',
+            'comparison': 'GreaterThanOrEqualToThreshold',
             'threshold': self.min_failures,
         }
 
@@ -256,7 +257,7 @@ class WFTimedOutAlarm(TimedOutAlarm):
                 'WorkflowTypeVersion': 'unspecified',
             },
             'metric': 'WorkflowsTimedOut',
-            'comparison': '>=',
+            'comparison': 'GreaterThanOrEqualToThreshold',
             'threshold': self.min_timeouts,
         }
 
@@ -283,6 +284,24 @@ def n2e(l):
     return l
 
 
+def flatten_dict_vals_equal(a, b):
+    if len(a) != len(b):
+        return False
+    for k, v in iteritems(a):
+        if k not in b:
+            return False
+        va, vb = v, b[k]
+        if not isinstance(va, collections.Iterable) \
+                or isinstance(va, basestring):
+            va = [va]
+        if not isinstance(vb, collections.Iterable) \
+                or isinstance(vb, basestring):
+            vb = [vb]
+        if va != vb:
+            return False
+    return True
+
+
 _alarm_equals_conditions = [
     lambda a: set(n2e(a[0].alarm_actions)) == set(n2e(a[1].alarm_actions)),
     lambda a: (set(n2e(a[0].insufficient_data_actions)) ==
@@ -294,7 +313,7 @@ _alarm_equals_conditions = [
     lambda a: a[0].comparison == a[1].comparison,
     lambda a: a[0].threshold == a[1].threshold,
     lambda a: a[0].metric == a[1].metric,
-    lambda a: a[0].dimensions == a[1].dimensions,
+    lambda a: flatten_dict_vals_equal(a[0].dimensions, a[1].dimensions),
 ]
 
 
