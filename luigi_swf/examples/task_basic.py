@@ -34,10 +34,10 @@ class DemoBasicTask(luigi.Task):
 
     # Use luigi_swf.cw.cw_update_workflows() to sync these to CloudWatch.
     swf_cw_alarms = [
-        cw.TaskFailedAlarm('arn:aws:sns:us-east-1:1234567:alert_ops'),
-        cw.TaskFailedAlarm('arn:aws:sns:us-east-1:1234567:alert_ops'),
-        cw.TaskHasNotCompletedAlarm('arn:aws:sns:us-east-1:1234567:alert_ops',
-                                    period=2.5 * hours),
+        cw.TaskFailedAlarm(['arn:aws:sns:us-east-1:1234567:alert_ops']),
+        cw.TaskFailedAlarm(['arn:aws:sns:us-east-1:1234567:alert_ops']),
+        cw.TaskHasNotCompletedAlarm(
+            ['arn:aws:sns:us-east-1:1234567:alert_ops'], period=2.5 * hours),
     ]
 
     def output(self):
