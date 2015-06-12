@@ -103,6 +103,7 @@ def test_get_runnables():
     state.completed = ['Task3']
     state.running = ['Task4']
     task_configs = fixture_task_configs()
+    decider.LuigiSwfDecider.__init__ = lambda s: None
     uut = decider.LuigiSwfDecider()
 
     # Execute
