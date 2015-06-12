@@ -15,7 +15,7 @@ import luigi.configuration
 from six import iteritems
 
 from .util import default_log_format, dthandler, kill_from_pid_file, \
-    SingleWaitingLockPidFile, get_all_tasks, get_class, dt_from_iso
+    SingleWaitingLockPidFile, get_task_configurations, get_class, dt_from_iso
 
 
 logger = logging.getLogger(__name__)
@@ -35,49 +35,43 @@ seconds = 1.
 
 class WfState(object):
 
-    def _get_all_tasks(self, events):
-        wf_event = next(e for e in events
-                        if e['eventType'] == 'WorkflowExecutionStarted')
-        wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
-        wf_input = json.loads(str(wf_event_attr['input']))
-        wf_params = wf_input['wf_params']
-        logger.debug('get_wf_state_full.get_all_tasks(), wf_input:\n%s',
-                     pp.pformat(wf_input))
-        wf_cls = get_class(*wf_input['wf_task'])
-        kwargs = dict()
-        for param_name, param_cls in wf_cls.get_params():
-            if param_name == 'pool':
-                continue
-            if isinstance(param_cls, luigi.DateParameter):
-                kwargs[param_name] = dt_from_iso(wf_params[param_name])
-            else:
-                kwargs[param_name] = wf_params[param_name]
-        wf_task = wf_cls(**kwargs)
-        all_tasks = get_all_tasks(wf_task, include_obj=True)
-        return all_tasks
+    def read_wf_state(self, events, task_configs):
+        # TODO: this shouldn't depend on task_configs
+        # Read what has happened.
+        self.version = self._get_version(events)
+        self.schedulings = self._get_all_schedulings(events)
+        self.completed = self._get_completed(events, task_configs)
+        self.failures = self._get_failures(events)
+        self.timeouts = self._get_timeouts(events)
+        self.retries = self._get_retries(events)
+        self.wf_cancel_req = self._get_wf_cancel_requested(events)
+        self.cancel_requests = self._get_task_cancel_requests(events)
+        self.cancellations = self._get_activity_cancellations(events)
+        # Make inferences.
+        self.running = self._get_running()
 
-    def get_version(self, events):
+    def _get_version(self, events):
         wf_event = next(e for e in events
                         if e['eventType'] == 'WorkflowExecutionStarted')
         wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
         return wf_event_attr['workflowType']['version']
 
-    def get_task_id(self, events, event_attributes):
+    def _get_task_id(self, events, event_attributes):
         event_id = event_attributes['scheduledEventId'] - 1
         activity = events[event_id]
         attributes = activity['activityTaskScheduledEventAttributes']
         return attributes['activityId']
 
-    def get_all_schedulings(self, events):
+    def _get_all_schedulings(self, events):
         all_schedulings = \
             [e[attrTaskScheduled]['activityId']
              for e in events
              if e['eventType'] == 'ActivityTaskScheduled']
         return Counter(all_schedulings)
 
-    def get_completed(self, events):
+    def _get_completed(self, events, task_configs):
         # Get completed activity tasks.
-        compl_act = [self.get_task_id(events, e[attrTaskCompleted])
+        compl_act = [self._get_task_id(events, e[attrTaskCompleted])
                      for e in events
                      if e['eventType'] == 'ActivityTaskCompleted']
         # Get completed wrappers.
@@ -86,7 +80,7 @@ class WfState(object):
         while True:
             completed = compl_act + completed_wrappers
             new_comp = [task_id
-                        for task_id, task in iteritems(self.all_tasks)
+                        for task_id, task in iteritems(task_configs)
                         if (task['is_wrapper']
                             and task_id not in completed
                             and all(t in completed for t in task['deps']))]
@@ -95,23 +89,23 @@ class WfState(object):
             completed_wrappers += new_comp
         return compl_act + completed_wrappers
 
-    def get_failures(self, events):
-        return Counter([self.get_task_id(events, e[attrTaskFailed])
+    def _get_failures(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskFailed])
                         for e in events
                         if e['eventType'] == 'ActivityTaskFailed'])
 
-    def get_timeouts(self, events):
-        return Counter([self.get_task_id(events, e[attrTaskTimedOut])
+    def _get_timeouts(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskTimedOut])
                         for e in events
                         if e['eventType'] == 'ActivityTaskTimedOut'])
 
-    def get_retries(self, events):
+    def _get_retries(self, events):
         def parse_retries(task_ids):
             try:
                 return map(lambda s: s.strip(), task_ids.strip().split('\n'))
             except:
                 tb = traceback.format_exc()
-                logger.error('get_wf_state_full.get_retries'
+                logger.error('get_wf_state_full._get_retries'
                              '.parse_retries():\n%s', tb)
                 return []
 
@@ -123,21 +117,21 @@ class WfState(object):
              for retry in parse_retries(e[attrWfSignaled]['input'])]
         return Counter(retries_flat)
 
-    def get_wf_cancel_requested(self, events):
+    def _get_wf_cancel_requested(self, events):
         return any(e for e in events
                    if e['eventType'] == 'WorkflowExecutionCancelRequested')
 
-    def get_task_cancel_requests(self, events):
+    def _get_task_cancel_requests(self, events):
         return [e[attrTaskCancReq]['activityId']
                 for e in events
                 if e['eventType'] == 'ActivityTaskCancelRequested']
 
-    def get_activity_cancellations(self, events):
-        return Counter([self.get_task_id(events, e[attrTaskCanceled])
+    def _get_activity_cancellations(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskCanceled])
                         for e in events
                         if e['eventType'] == 'ActivityTaskCanceled'])
 
-    def get_running(self):
+    def _get_running(self):
         return \
             [task_id
              for task_id, sched_count
@@ -146,28 +140,6 @@ class WfState(object):
                  sched_count > (self.failures[task_id]
                                 + self.timeouts[task_id]
                                 + self.cancellations[task_id]))]
-
-    def get_running_mutexes(self):
-        return \
-            set(task['running_mutex']
-                for task_id, task in iteritems(self.all_tasks)
-                if task_id in self.running and task['running_mutex'])
-
-    def read_wf_state(self, events):
-        self.all_tasks = self._get_all_tasks(events)
-        # Read what has happened.
-        self.version = self.get_version(events)
-        self.schedulings = self.get_all_schedulings(events)
-        self.completed = self.get_completed(events)
-        self.failures = self.get_failures(events)
-        self.timeouts = self.get_timeouts(events)
-        self.retries = self.get_retries(events)
-        self.wf_cancel_req = self.get_wf_cancel_requested(events)
-        self.cancel_requests = self.get_task_cancel_requests(events)
-        self.cancellations = self.get_activity_cancellations(events)
-        self.running_mutexes = self.get_running_mutexes()
-        # Make inferences.
-        self.running = self.get_running()
 
 
 class LuigiSwfDecider(swf.Decider):
@@ -193,10 +165,11 @@ class LuigiSwfDecider(swf.Decider):
                 logger.debug('LuigiSwfDecider().run(), poll timed out')
                 return
             events = self._get_events(decision_task)
+            task_configs = self._get_task_configurations(events)
             state = WfState()
-            state.read_wf_state(events)
+            state.read_wf_state(events, task_configs)
             if not state.wf_cancel_req:
-                self._schedule_activities(state, decisions)
+                self._schedule_activities(state, decisions, task_configs)
             else:
                 self._cancel_activities(state, decisions)
             self.complete(decisions=decisions)
@@ -220,17 +193,18 @@ class LuigiSwfDecider(swf.Decider):
                 events += decision_task['events']
         return events
 
-    def _schedule_activities(self, state, decisions):
+    def _schedule_activities(self, state, decisions, task_configs):
         scheduled_count = 0
-        runnables = self._get_runnables(state)
+        runnables = self._get_runnables(state, task_configs)
+        running_mutexes = self._get_running_mutexes(state, task_configs)
         for task_id, task in iteritems(runnables):
             if task_id in state.unretryables:
                 continue
             if task['running_mutex'] is not None:
                 # These tasks want to run one-at-a-time per workflow execution.
-                if task['running_mutex'] in state['running_mutexes']:
+                if task['running_mutex'] in running_mutexes:
                     continue
-                state.running_mutexes.add(task['running_mutex'])
+                running_mutexes.add(task['running_mutex'])
             scheduled_count += 1
             start_to_close = task['start_to_close_timeout']
             schedule_to_start = task['schedule_to_start_timeout']
@@ -247,7 +221,7 @@ class LuigiSwfDecider(swf.Decider):
                 input=json.dumps(task, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
         if scheduled_count == 0 and len(state.running) == 0:
-            unretryables = self._get_unretryables(state)
+            unretryables = self._get_unretryables(state, task_configs)
             if len(unretryables) > 0:
                 msg = 'Task(s) failed: ' + ', '.join(unretryables)
                 logger.error('LuigiSwfDecider().run(), '
@@ -267,22 +241,48 @@ class LuigiSwfDecider(swf.Decider):
         else:
             decisions.cancel_workflow_executions()
 
-    def _get_runnables(self, state):
+    def _get_runnables(self, state, task_configs):
         result = {}
-        for task_id, task in iteritems(state.all_tasks):
+        for task_id, task in iteritems(task_configs):
             if task_id not in state.completed and \
                     task_id not in state.running and \
                     all(d in state.completed for d in task['deps']):
                 result[task_id] = task
         return result
 
-    def _get_unretryables(self, state):
+    def _get_unretryables(self, state, task_configs):
         result = []
         for task_id, count in iteritems(state.failures):
-            if count > state.all_tasks[task_id]['retries'] + \
+            if count > task_configs[task_id]['retries'] + \
                     state.retries.get(task_id, 0):
                 result.append(task_id)
         return result
+
+    def _get_task_configurations(self, events):
+        wf_event = next(e for e in events
+                        if e['eventType'] == 'WorkflowExecutionStarted')
+        wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
+        wf_input = json.loads(str(wf_event_attr['input']))
+        wf_params = wf_input['wf_params']
+        logger.debug('get_wf_state_full.get_task_configurations(), '
+                     'wf_input:\n%s', pp.pformat(wf_input))
+        wf_cls = get_class(*wf_input['wf_task'])
+        kwargs = dict()
+        for param_name, param_cls in wf_cls.get_params():
+            if param_name == 'pool':
+                continue
+            if isinstance(param_cls, luigi.DateParameter):
+                kwargs[param_name] = dt_from_iso(wf_params[param_name])
+            else:
+                kwargs[param_name] = wf_params[param_name]
+        wf_task = wf_cls(**kwargs)
+        return get_task_configurations(wf_task, include_obj=True)
+
+    def _get_running_mutexes(self, state, task_configs):
+        return \
+            set(task['running_mutex']
+                for task_id, task in iteritems(task_configs)
+                if task_id in state.running and task['running_mutex'])
 
 
 class DeciderServer(object):
