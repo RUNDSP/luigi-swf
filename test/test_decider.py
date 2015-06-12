@@ -1,3 +1,4 @@
+import boto.swf.layer2 as swf
 from luigi_swf import decider
 
 
@@ -33,6 +34,7 @@ def test_read_wf_state():
     assert wf_state.failures == {'Task1': 1}
     assert wf_state.timeouts == {'Task1': 1}
     assert wf_state.retries == {'Task6': 1}
+    assert wf_state.running == 0  # TODO: test running count
     assert wf_state.wf_cancel_req is False
 
 
@@ -69,6 +71,21 @@ def test_get_runnables():
         'Task6': {'deps': ['Task3'], 'is_wrapper': True},
     }
     assert actual == expected
+
+
+def test_decide():
+    # Setup
+    state = fixture_state()
+    task_configs = fixture_task_configs()
+    decisions = swf.Layer1Decisions()
+    decider.LuigiSwfDecider.__init__ = lambda s: None
+    uut = decider.LuigiSwfDecider()
+
+    # Execute
+    uut._decide(state, decisions, task_configs)
+
+    # Test
+    # TODO
 
 
 def fixture_events():
@@ -148,11 +165,45 @@ def fixture_events_cancel_requested():
 
 def fixture_task_configs():
     return {
-        'Task1': {'deps': ['Task3'], 'is_wrapper': False},
-        'Task2': {'deps': ['Task3'], 'is_wrapper': False},
-        'Task3': {'deps': [], 'is_wrapper': False},
-        'Task4': {'deps': [], 'is_wrapper': False},
-        'Task5': {'deps': ['Task1'], 'is_wrapper': True},
-        'Task6': {'deps': ['Task3'], 'is_wrapper': True},
-        'Task7': {'deps': ['Task6'], 'is_wrapper': True},
+        'Task1': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task2': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task3': {'deps': [], 'is_wrapper': False, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task4': {'deps': [], 'is_wrapper': False, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task5': {'deps': ['Task1'], 'is_wrapper': True, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task6': {'deps': ['Task3'], 'is_wrapper': True, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
+        'Task7': {'deps': ['Task6'], 'is_wrapper': True, 'retries': 0,
+                  'running_mutex': None, 'start_to_close_timeout': 0,
+                  'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0},
     }
+
+
+def fixture_state():
+    wf_state = decider.WfState()
+    wf_state.version = 'version1'
+    wf_state.schedulings = {'Task3': 1, 'Task1': 2}
+    wf_state.completed = ['Task3', 'Task6', 'Task7']
+    wf_state.failures = {'Task1': 1}
+    wf_state.timeouts = {'Task1': 1}
+    wf_state.retries = {'Task6': 1}
+    wf_state.running = []  # TODO
+    wf_state.wf_cancel_req = False
+    return wf_state
