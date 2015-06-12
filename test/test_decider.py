@@ -36,6 +36,7 @@ def test_get_runnables():
 
 def test_get_completed_activities():
     # Setup
-    events = fixture_events()
+    # events = fixture_events()
 
     # Execute
+    pass
