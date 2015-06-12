@@ -1,46 +1,6 @@
 from luigi_swf import decider
 
 
-def fixture_events():
-    return [
-        {
-            'eventId': 1,
-            'eventType': 'WorkflowExecutionStarted',
-            'workflowExecutionStartedEventAttributes': {
-                'workflowType': {
-                    'version': 'version1',
-                },
-            },
-        },
-        {
-            'eventId': 2,
-            'eventType': 'ActivityTaskScheduled',
-            'activityTaskScheduledEventAttributes': {
-                'activityId': 'Task3',
-            }
-        },
-        {
-            'eventId': 3,
-            'eventType': 'ActivityTaskCompleted',
-            'activityTaskCompletedEventAttributes': {
-                'scheduledEventId': 2,
-            }
-        }
-    ]
-
-
-def fixture_task_configs():
-    return {
-        'Task1': {'deps': ['Task3'], 'is_wrapper': False},
-        'Task2': {'deps': ['Task3'], 'is_wrapper': False},
-        'Task3': {'deps': [], 'is_wrapper': False},
-        'Task4': {'deps': [], 'is_wrapper': False},
-        'Task5': {'deps': ['Task1'], 'is_wrapper': True},
-        'Task6': {'deps': ['Task3'], 'is_wrapper': True},
-        'Task7': {'deps': ['Task6'], 'is_wrapper': True},
-    }
-
-
 def test_get_version():
     # Setup
     events = fixture_events()
@@ -79,7 +39,7 @@ def test_get_all_schedulings():
     actual = uut._get_all_schedulings(events)
 
     # Test
-    expected = {'Task3': 1}
+    expected = {'Task3': 1, 'Task1': 1}
     assert actual == expected
 
 
@@ -94,6 +54,19 @@ def test_get_completed():
 
     # Test
     expected = ['Task3', 'Task6', 'Task7']
+    assert actual == expected
+
+
+def test_get_failures():
+    # Setup
+    events = fixture_events()
+    uut = decider.WfState()
+
+    # Execute
+    actual = uut._get_failures(events)
+
+    # Test
+    expected = {'Task1': 1}
     assert actual == expected
 
 
@@ -117,3 +90,57 @@ def test_get_runnables():
         'Task6': {'deps': ['Task3'], 'is_wrapper': True},
     }
     assert actual == expected
+
+
+def fixture_events():
+    return [
+        {
+            'eventId': 1,
+            'eventType': 'WorkflowExecutionStarted',
+            'workflowExecutionStartedEventAttributes': {
+                'workflowType': {
+                    'version': 'version1',
+                },
+            },
+        },
+        {
+            'eventId': 2,
+            'eventType': 'ActivityTaskScheduled',
+            'activityTaskScheduledEventAttributes': {
+                'activityId': 'Task3',
+            },
+        },
+        {
+            'eventId': 3,
+            'eventType': 'ActivityTaskCompleted',
+            'activityTaskCompletedEventAttributes': {
+                'scheduledEventId': 2,  # Task3
+            },
+        },
+        {
+            'eventId': 4,
+            'eventType': 'ActivityTaskScheduled',
+            'activityTaskScheduledEventAttributes': {
+                'activityId': 'Task1',
+            },
+        },
+        {
+            'eventId': 5,
+            'eventType': 'ActivityTaskFailed',
+            'activityTaskFailedEventAttributes': {
+                'scheduledEventId': 4,  # Task1
+            },
+        },
+    ]
+
+
+def fixture_task_configs():
+    return {
+        'Task1': {'deps': ['Task3'], 'is_wrapper': False},
+        'Task2': {'deps': ['Task3'], 'is_wrapper': False},
+        'Task3': {'deps': [], 'is_wrapper': False},
+        'Task4': {'deps': [], 'is_wrapper': False},
+        'Task5': {'deps': ['Task1'], 'is_wrapper': True},
+        'Task6': {'deps': ['Task3'], 'is_wrapper': True},
+        'Task7': {'deps': ['Task6'], 'is_wrapper': True},
+    }
