@@ -83,6 +83,19 @@ def test_get_timeouts():
     assert actual == expected
 
 
+def test_get_retries():
+    # Setup
+    events = fixture_events()
+    uut = decider.WfState()
+
+    # Execute
+    actual = uut._get_retries(events)
+
+    # Test
+    expected = {'Task6': 1}
+    assert actual == expected
+
+
 def test_get_runnables():
     # Setup
     state = decider.WfState()
@@ -156,6 +169,14 @@ def fixture_events():
             'eventType': 'ActivityTaskTimedOut',
             'activityTaskTimedOutEventAttributes': {
                 'scheduledEventId': 6,  # Task1
+            },
+        },
+        {
+            'eventId': 8,
+            'eventType': 'WorkflowExecutionSignaled',
+            'workflowExecutionSignaledEventAttributes': {
+                'signalName': 'retry',
+                'input': 'Task6',
             },
         },
     ]
