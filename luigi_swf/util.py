@@ -130,7 +130,7 @@ def get_luigi_params(task):
 default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 
-def get_all_tasks(task, include_obj=False):
+def get_task_configurations(task, include_obj=False):
     deps = task.deps()
     start_to_close = getattr(task, 'swf_start_to_close_timeout', None)
     if start_to_close is None:
@@ -167,7 +167,7 @@ def get_all_tasks(task, include_obj=False):
     if include_obj:
         tasks[task.task_id]['task'] = task
     for dep in deps:
-        tasks.update(get_all_tasks(dep))
+        tasks.update(get_task_configurations(dep))
     return tasks
 
 
