@@ -1,19 +1,6 @@
 from luigi_swf import decider
 
 
-def test_get_version():
-    # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-
-    # Execute
-    actual = uut._get_version(events)
-
-    # Test
-    expected = 'version1'
-    assert actual == expected
-
-
 def test_get_task_id():
     # Setup
     events = fixture_events()
@@ -30,88 +17,36 @@ def test_get_task_id():
     assert actual == expected
 
 
-def test_get_all_schedulings():
-    # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-
-    # Execute
-    actual = uut._get_all_schedulings(events)
-
-    # Test
-    expected = {'Task3': 1, 'Task1': 2}
-    assert actual == expected
-
-
-def test_get_completed():
+def test_read_wf_state():
     # Setup
     events = fixture_events()
     task_configs = fixture_task_configs()
-    uut = decider.WfState()
+    wf_state = decider.WfState()
 
     # Execute
-    actual = uut._get_completed(events, task_configs)
+    wf_state.read_wf_state(events, task_configs)
 
     # Test
-    expected = ['Task3', 'Task6', 'Task7']
-    assert actual == expected
-
-
-def test_get_failures():
-    # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-
-    # Execute
-    actual = uut._get_failures(events)
-
-    # Test
-    expected = {'Task1': 1}
-    assert actual == expected
-
-
-def test_get_timeouts():
-    # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-
-    # Execute
-    actual = uut._get_timeouts(events)
-
-    # Test
-    expected = {'Task1': 1}
-    assert actual == expected
-
-
-def test_get_retries():
-    # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-
-    # Execute
-    actual = uut._get_retries(events)
-
-    # Test
-    expected = {'Task6': 1}
-    assert actual == expected
+    assert wf_state.version == 'version1'
+    assert wf_state.schedulings == {'Task3': 1, 'Task1': 2}
+    assert wf_state.completed == ['Task3', 'Task6', 'Task7']
+    assert wf_state.failures == {'Task1': 1}
+    assert wf_state.timeouts == {'Task1': 1}
+    assert wf_state.retries == {'Task6': 1}
+    assert wf_state.wf_cancel_req is False
 
 
 def test_get_wf_cancel_requested():
     # Setup
-    events = fixture_events()
-    events_cancel_requested = fixture_events_cancel_requested()
+    events = fixture_events_cancel_requested()
     uut = decider.WfState()
 
     # Execute
     actual = uut._get_wf_cancel_requested(events)
-    actual_cancel_requested = \
-        uut._get_wf_cancel_requested(events_cancel_requested)
 
     # Test
-    expected = False
-    expected_cancel_requested = True
+    expected = True
     assert actual == expected
-    assert actual_cancel_requested == expected_cancel_requested
 
 
 def test_get_runnables():
