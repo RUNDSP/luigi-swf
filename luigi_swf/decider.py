@@ -36,7 +36,6 @@ seconds = 1.
 class WfState(object):
 
     def read_wf_state(self, events, task_configs):
-        # TODO: this shouldn't depend on task_configs
         # Read what has happened.
         self.version = self._get_version(events)
         self.schedulings = self._get_all_schedulings(events)
