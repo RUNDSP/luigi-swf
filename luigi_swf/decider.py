@@ -167,10 +167,7 @@ class LuigiSwfDecider(swf.Decider):
             task_configs = self._get_task_configurations(events)
             state = WfState()
             state.read_wf_state(events, task_configs)
-            if not state.wf_cancel_req:
-                self._schedule_activities(state, decisions, task_configs)
-            else:
-                self._cancel_activities(state, decisions)
+            self._decide()
             self.complete(decisions=decisions)
         except Exception as error:
             tb = traceback.format_exc()
@@ -181,6 +178,12 @@ class LuigiSwfDecider(swf.Decider):
             decisions.fail_workflow_execution(reason=reason, details=details)
             self.complete(decisions=decisions)
             raise
+
+    def _decide(self, state, decisions, task_configs):
+        if not state.wf_cancel_req:
+            self._schedule_activities(state, decisions, task_configs)
+        else:
+            self._cancel_activities(state, decisions)
 
     def _get_events(self, decision_task):
         # It's paginated.
@@ -196,8 +199,9 @@ class LuigiSwfDecider(swf.Decider):
         scheduled_count = 0
         runnables = self._get_runnables(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
+        unretryables = self._get_unretryables(state, task_configs)
         for task_id, task in iteritems(runnables):
-            if task_id in state.unretryables:
+            if task_id in unretryables:
                 continue
             if task['running_mutex'] is not None:
                 # These tasks want to run one-at-a-time per workflow execution.
@@ -220,7 +224,6 @@ class LuigiSwfDecider(swf.Decider):
                 input=json.dumps(task, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
         if scheduled_count == 0 and len(state.running) == 0:
-            unretryables = self._get_unretryables(state, task_configs)
             if len(unretryables) > 0:
                 msg = 'Task(s) failed: ' + ', '.join(unretryables)
                 logger.error('LuigiSwfDecider().run(), '
