@@ -39,7 +39,7 @@ def test_get_all_schedulings():
     actual = uut._get_all_schedulings(events)
 
     # Test
-    expected = {'Task3': 1, 'Task1': 1}
+    expected = {'Task3': 1, 'Task1': 2}
     assert actual == expected
 
 
@@ -64,6 +64,19 @@ def test_get_failures():
 
     # Execute
     actual = uut._get_failures(events)
+
+    # Test
+    expected = {'Task1': 1}
+    assert actual == expected
+
+
+def test_get_timeouts():
+    # Setup
+    events = fixture_events()
+    uut = decider.WfState()
+
+    # Execute
+    actual = uut._get_timeouts(events)
 
     # Test
     expected = {'Task1': 1}
@@ -129,6 +142,20 @@ def fixture_events():
             'eventType': 'ActivityTaskFailed',
             'activityTaskFailedEventAttributes': {
                 'scheduledEventId': 4,  # Task1
+            },
+        },
+        {
+            'eventId': 6,
+            'eventType': 'ActivityTaskScheduled',
+            'activityTaskScheduledEventAttributes': {
+                'activityId': 'Task1',
+            },
+        },
+        {
+            'eventId': 7,
+            'eventType': 'ActivityTaskTimedOut',
+            'activityTaskTimedOutEventAttributes': {
+                'scheduledEventId': 6,  # Task1
             },
         },
     ]
