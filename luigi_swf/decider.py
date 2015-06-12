@@ -125,21 +125,23 @@ class LuigiSwfDecider(swf.Decider):
                 result[task_id] = task
         return result
 
-    def _get_unretryables(self, all_tasks, failed, retries):
-        for task_id, count in iteritems(failed):
-            if count > all_tasks[task_id]['retries'] + retries.get(task_id, 0):
-                yield task_id
+    def _get_all_schedulings(self, events):
+        all_schedulings = \
+            [e[attrTaskScheduled]['activityId']
+             for e in events
+             if e['eventType'] == 'ActivityTaskScheduled']
+        return Counter(all_schedulings)
 
     def _get_completed_activities(self, events):
         return [self._get_task_id(events, e[attrTaskCompleted])
                 for e in events
                 if e['eventType'] == 'ActivityTaskCompleted']
 
-    def _get_completed_wrappers(self, all_tasks, completed_activities):
+    def _get_completed_wrappers(self, all_tasks, state):
         # Iterate so wrappers can depend on one another.
         completed_wrappers = []
         while True:
-            completed = completed_activities + completed_wrappers
+            completed = state['completed_activities'] + completed_wrappers
             new_comp = [task_id
                         for task_id, task in iteritems(all_tasks)
                         if (task['is_wrapper']
@@ -150,47 +152,47 @@ class LuigiSwfDecider(swf.Decider):
             completed_wrappers += new_comp
         return completed_wrappers
 
-    def _get_state(self, events):
-        all_tasks = self._get_all_tasks(events)
-        state = dict()
-        state['all_schedulings'] = \
-            [e[attrTaskScheduled]['activityId']
-             for e in events
-             if e['eventType'] == 'ActivityTaskScheduled']
-        state['schedulings'] = Counter(state['all_schedulings'])
-        state['compl_act'] = self._get_completed_activities(events)
-        state['compl_w'] = self._get_completed_wrappers(all_tasks,
-                                                        state['compl_act'])
-        state['completed'] = state['compl_act'] + state['compl_w']
-        failures_flat = [self._get_task_id(events, e[attrTaskFailed])
-                         for e in events
-                         if e['eventType'] == 'ActivityTaskFailed']
-        state['failures'] = Counter(failures_flat)
-        timeouts_flat = [self._get_task_id(events, e[attrTaskTimedOut])
-                         for e in events
-                         if e['eventType'] == 'ActivityTaskTimedOut']
-        state['timeouts'] = Counter(timeouts_flat)
+    def _get_completed(self, all_tasks, events, state):
+        compl_act = self._get_completed_activities(events)
+        compl_w = self._get_completed_wrappers(all_tasks, state)
+        return compl_act + compl_w
+
+    def _get_failures(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskFailed])
+                        for e in events
+                        if e['eventType'] == 'ActivityTaskFailed'])
+
+    def _get_timeouts(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskTimedOut])
+                        for e in events
+                        if e['eventType'] == 'ActivityTaskTimedOut'])
+
+    def _get_retries(self, events):
         retries_flat = \
             [retry
              for e in events
              if (e['eventType'] == 'WorkflowExecutionSignaled'
                  and e[attrWfSignaled]['signalName'] == 'retry')
              for retry in self._parse_retries(e[attrWfSignaled]['input'])]
-        state['retries'] = Counter(retries_flat)
-        state['wf_cancel_req'] = any(e for e in events
-                                     if e['eventType'] == ('WorkflowExecution'
-                                                           'CancelRequested'))
-        state['cancel_requests'] = [e[attrTaskCancReq]['activityId']
-                                    for e in events
-                                    if e['eventType'] == ('ActivityTask'
-                                                          'CancelRequested')]
-        act_cancels = [self._get_task_id(events,
-                                         e[attrTaskCanceled])
-                       for e in events
-                       if e['eventType'] == ('ActivityTask'
-                                             'Canceled')]
-        state['cancellations'] = Counter(act_cancels)
-        state['running'] = \
+        return Counter(retries_flat)
+
+    def _get_wf_cancel_requested(self, events):
+        return any(e for e in events
+                   if e['eventType'] == 'WorkflowExecutionCancelRequested')
+
+    def _get_task_cancel_requests(self, events):
+        return [e[attrTaskCancReq]['activityId']
+                for e in events
+                if e['eventType'] == ('ActivityTask'
+                                      'CancelRequested')]
+
+    def _get_activity_cancellations(self, events):
+        return Counter([self._get_task_id(events, e[attrTaskCanceled])
+                        for e in events
+                        if e['eventType'] == 'ActivityTaskCanceled'])
+
+    def _get_running(self, state):
+        return \
             [task_id
              for task_id, sched_count
              in iteritems(state['schedulings'])
@@ -198,14 +200,36 @@ class LuigiSwfDecider(swf.Decider):
                  sched_count > (state['failures'][task_id]
                                 + state['timeouts'][task_id]
                                 + state['cancellations'][task_id]))]
-        state['running_mutexes'] = \
+
+    def _get_running_mutexes(self, all_tasks, state):
+        return \
             set(task['running_mutex']
                 for task_id, task in iteritems(all_tasks)
                 if task_id in state['running'] and task['running_mutex'])
+
+    def _get_unretryables(self, all_tasks, state):
+        result = []
+        for task_id, count in iteritems(state['failures']):
+            if count > all_tasks[task_id]['retries'] + \
+                    state['retries'].get(task_id, 0):
+                result.append(task_id)
+        return result
+
+    def _get_state(self, events):
+        all_tasks = self._get_all_tasks(events)
+        state = dict()
+        state['schedulings'] = self._get_all_schedulings(events)
+        state['completed'] = self._get_completed(all_tasks, events, state)
+        state['failures'] = self._get_failures(events)
+        state['timeouts'] = self._get_timeouts(events)
+        state['retries'] = self._get_retries(events)
+        state['wf_cancel_req'] = self._get_wf_cancel_requested(events)
+        state['cancel_requests'] = self._get_task_cancel_requests(events)
+        state['cancellations'] = self._get_activity_cancellations(events)
+        state['running'] = self._get_running(state)
+        state['running_mutexes'] = self._get_running_mutexes(all_tasks, state)
         state['runnables'] = self._get_runnables(all_tasks, state)
-        state['unretryables'] = list(self._get_unretryables(all_tasks,
-                                                            state['failures'],
-                                                            state['retries']))
+        state['unretryables'] = self._get_unretryables(all_tasks, state)
         logger.debug('LuigiSwfDecider().get_state(), state:\n%s',
                      pp.pformat(state))
         return state
