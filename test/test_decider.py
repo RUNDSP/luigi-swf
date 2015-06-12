@@ -96,6 +96,24 @@ def test_get_retries():
     assert actual == expected
 
 
+def test_get_wf_cancel_requested():
+    # Setup
+    events = fixture_events()
+    events_cancel_requested = fixture_events_cancel_requested()
+    uut = decider.WfState()
+
+    # Execute
+    actual = uut._get_wf_cancel_requested(events)
+    actual_cancel_requested = \
+        uut._get_wf_cancel_requested(events_cancel_requested)
+
+    # Test
+    expected = False
+    expected_cancel_requested = True
+    assert actual == expected
+    assert actual_cancel_requested == expected_cancel_requested
+
+
 def test_get_runnables():
     # Setup
     state = decider.WfState()
@@ -177,6 +195,17 @@ def fixture_events():
             'workflowExecutionSignaledEventAttributes': {
                 'signalName': 'retry',
                 'input': 'Task6',
+            },
+        },
+    ]
+
+
+def fixture_events_cancel_requested():
+    return fixture_events() + [
+        {
+            'eventId': 9,
+            'eventType': 'WorkflowExecutionCancelRequested',
+            'workflowExecutionCancelRequestedEventAttributes': {
             },
         },
     ]
