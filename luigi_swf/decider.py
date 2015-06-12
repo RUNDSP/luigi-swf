@@ -116,32 +116,24 @@ class LuigiSwfDecider(swf.Decider):
         attributes = activity['activityTaskScheduledEventAttributes']
         return attributes['activityId']
 
-    def _get_runnables(self, all_tasks, completed, running):
-        """
-        >>> all_tasks = {
-        ...     'Task1': {'deps': ['Task3']},
-        ...     'Task2': {'deps': ['Task3']},
-        ...     'Task3': {'deps': []},
-        ...     'Task4': {'deps': []},
-        ... }
-        >>> completed = ['Task3']
-        >>> running = ['Task4']
-        >>> decider = LuigiSwfDecider()
-        >>> list(decider._get_runnables(all_tasks, completed, running))
-        [('Task1', {'deps': ['Task3']}), ('Task2', {'deps': ['Task3']})]
-        >>> completed = ['Task1']
-        >>> list(decider._get_runnables(all_tasks, completed))
-        [('Task3', {'deps': []})]
-        """
+    def _get_runnables(self, all_tasks, state):
+        result = {}
         for task_id, task in iteritems(all_tasks):
-            if task_id not in completed and task_id not in running and \
-                    all(d in completed for d in task['deps']):
-                yield task_id, task
+            if task_id not in state['completed'] and \
+                    task_id not in state['running'] and \
+                    all(d in state['completed'] for d in task['deps']):
+                result[task_id] = task
+        return result
 
     def _get_unretryables(self, all_tasks, failed, retries):
         for task_id, count in iteritems(failed):
             if count > all_tasks[task_id]['retries'] + retries.get(task_id, 0):
                 yield task_id
+
+    def _get_completed_activities(self, events):
+        return [self._get_task_id(events, e[attrTaskCompleted])
+                for e in events
+                if e['eventType'] == 'ActivityTaskCompleted']
 
     def _get_completed_wrappers(self, all_tasks, completed_activities):
         # Iterate so wrappers can depend on one another.
@@ -166,9 +158,7 @@ class LuigiSwfDecider(swf.Decider):
              for e in events
              if e['eventType'] == 'ActivityTaskScheduled']
         state['schedulings'] = Counter(state['all_schedulings'])
-        state['compl_act'] = [self._get_task_id(events, e[attrTaskCompleted])
-                              for e in events
-                              if e['eventType'] == 'ActivityTaskCompleted']
+        state['compl_act'] = self._get_completed_activities(events)
         state['compl_w'] = self._get_completed_wrappers(all_tasks,
                                                         state['compl_act'])
         state['completed'] = state['compl_act'] + state['compl_w']
@@ -212,9 +202,7 @@ class LuigiSwfDecider(swf.Decider):
             set(task['running_mutex']
                 for task_id, task in iteritems(all_tasks)
                 if task_id in state['running'] and task['running_mutex'])
-        state['runnables'] = list(self._get_runnables(all_tasks,
-                                                      state['completed'],
-                                                      state['running']))
+        state['runnables'] = self._get_runnables(all_tasks, state)
         state['unretryables'] = list(self._get_unretryables(all_tasks,
                                                             state['failures'],
                                                             state['retries']))
@@ -232,7 +220,7 @@ class LuigiSwfDecider(swf.Decider):
 
     def _schedule_activities(self, state, decisions, version):
         scheduled_count = 0
-        for task_id, task in state['runnables']:
+        for task_id, task in iteritems(state['runnables']):
             if task_id in state['unretryables']:
                 continue
             if task['running_mutex'] is not None:
