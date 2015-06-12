@@ -1,4 +1,4 @@
-from luigi_swf.decider import LuigiSwfDecider
+from luigi_swf import decider
 
 
 def fixture_events():
@@ -16,15 +16,14 @@ def fixture_all_tasks():
 
 def test_get_runnables():
     # Setup
-    all_tasks = fixture_all_tasks()
-    state = {
-        'completed': ['Task3'],
-        'running': ['Task4'],
-    }
-    decider = LuigiSwfDecider()
+    state = decider.WfState()
+    state.all_tasks = fixture_all_tasks()
+    state.completed = ['Task3']
+    state.running = ['Task4']
+    uut = decider.LuigiSwfDecider()
 
     # Execute
-    actual = decider._get_runnables(all_tasks, state)
+    actual = uut._get_runnables(state)
 
     # Test
     expected = {
@@ -32,11 +31,3 @@ def test_get_runnables():
         'Task2': {'deps': ['Task3']},
     }
     assert actual == expected
-
-
-def test_get_completed_activities():
-    # Setup
-    # events = fixture_events()
-
-    # Execute
-    pass
