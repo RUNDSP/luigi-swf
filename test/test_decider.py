@@ -2,7 +2,31 @@ from luigi_swf import decider
 
 
 def fixture_events():
-    pass
+    return [
+        {
+            'eventId': 1,
+            'eventType': 'WorkflowExecutionStarted',
+            'workflowExecutionStartedEventAttributes': {
+                'workflowType': {
+                    'version': 'version1',
+                },
+            },
+        },
+        {
+            'eventId': 2,
+            'eventType': 'activityTaskStarted',
+            'activityTaskScheduledEventAttributes': {
+                'activityId': 'Task3',
+            }
+        },
+        {
+            'eventId': 3,
+            'eventType': 'activityTaskCompleted',
+            'activityTaskCompletedEventAttributes': {
+                'scheduledEventId': 1,
+            }
+        }
+    ]
 
 
 def fixture_task_configs():
@@ -13,6 +37,35 @@ def fixture_task_configs():
         'Task4': {'deps': []},
         'Task5': {'deps': ['Task1']},
     }
+
+
+def test_get_version():
+    # Setup
+    events = fixture_events()
+    uut = decider.WfState()
+
+    # Execute
+    actual = uut._get_version(events)
+
+    # Test
+    expected = 'version1'
+    assert actual == expected
+
+
+def test_get_task_id():
+    # Setup
+    events = fixture_events()
+    uut = decider.WfState()
+    event_attributes = {
+        'scheduledEventId': 2,
+    }
+
+    # Execute
+    actual = uut._get_task_id(events, event_attributes)
+
+    # Test
+    expected = 'Task3'
+    assert actual == expected
 
 
 def test_get_runnables():
