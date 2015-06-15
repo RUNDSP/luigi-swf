@@ -1,4 +1,5 @@
 import json
+from pprint import pformat
 
 import boto.swf.layer2 as swf
 
@@ -101,12 +102,7 @@ def test_decide():
                 'startToCloseTimeout': '0',
                 'heartbeatTimeout': '0',
                 'input': json.dumps({
-                    "running_mutex": None,
-                    "schedule_to_start_timeout": 0, "deps": ["Task3"],
-                    "schedule_to_close_timeout": 0, "retries": 0,
-                    "is_wrapper": False, "start_to_close_timeout": 0,
-                    "heartbeat_timeout": 0, "task_list": "default",
-                    "task_family": "Task2"
+                    'class': ('aoeu', 'Task2'), 'params': {}
                 }, default=util.dthandler),
             },
         },
@@ -121,12 +117,7 @@ def test_decide():
                 'startToCloseTimeout': '0',
                 'heartbeatTimeout': '0',
                 'input': json.dumps({
-                    "running_mutex": None,
-                    "schedule_to_start_timeout": 0, "deps": [],
-                    "schedule_to_close_timeout": 0, "retries": 0,
-                    "is_wrapper": False, "start_to_close_timeout": 0,
-                    "heartbeat_timeout": 0, "task_list": "default",
-                    "task_family": "Task4"
+                    'class': ('aoeu', 'Task4'), 'params': {}
                 }, default=util.dthandler),
             },
         },
@@ -215,37 +206,44 @@ def fixture_task_configs():
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task1', 'task_list': 'default'},
+                  'task_family': 'Task1', 'task_list': 'default',
+                  'class': ('aoeu', 'Task1'), 'params': {}},
         'Task2': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task2', 'task_list': 'default'},
+                  'task_family': 'Task2', 'task_list': 'default',
+                  'class': ('aoeu', 'Task2'), 'params': {}},
         'Task3': {'deps': [], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task3', 'task_list': 'default'},
+                  'task_family': 'Task3', 'task_list': 'default',
+                  'class': ('aoeu', 'Task3'), 'params': {}},
         'Task4': {'deps': [], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task4', 'task_list': 'default'},
+                  'task_family': 'Task4', 'task_list': 'default',
+                  'class': ('aoeu', 'Task4'), 'params': {}},
         'Task5': {'deps': ['Task1'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task5', 'task_list': 'default'},
+                  'task_family': 'Task5', 'task_list': 'default',
+                  'class': ('aoeu', 'Task5'), 'params': {}},
         'Task6': {'deps': ['Task3'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task6', 'task_list': 'default'},
+                  'task_family': 'Task6', 'task_list': 'default',
+                  'class': ('aoeu', 'Task6'), 'params': {}},
         'Task7': {'deps': ['Task6'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'schedule_to_start_timeout': 0, 'heartbeat_timeout': 0,
                   'schedule_to_close_timeout': 0,
-                  'task_family': 'Task7', 'task_list': 'default'},
+                  'task_family': 'Task7', 'task_list': 'default',
+                  'class': ('aoeu', 'Task7'), 'params': {}},
     }
 
 
@@ -270,7 +268,8 @@ def normalize_decisions(decisions):
             d['scheduleActivityTaskDecisionAttributes'] = \
                 d['scheduleActivityTaskDecisionAttributes'].copy()
             d['scheduleActivityTaskDecisionAttributes']['input'] = \
-                json.loads(d['scheduleActivityTaskDecisionAttributes']
-                           ['input'])
+                pformat(
+                    json.loads(
+                        d['scheduleActivityTaskDecisionAttributes']['input']))
         res.append(d)
     return res
