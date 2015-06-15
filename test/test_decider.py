@@ -1,5 +1,8 @@
+import json
+
 import boto.swf.layer2 as swf
-from luigi_swf import decider
+
+from luigi_swf import decider, util
 
 
 def test_get_task_id():
@@ -34,7 +37,7 @@ def test_read_wf_state():
     assert wf_state.failures == {'Task1': 1}
     assert wf_state.timeouts == {'Task1': 1}
     assert wf_state.retries == {'Task6': 1}
-    assert wf_state.running == 0  # TODO: test running count
+    assert wf_state.running == []  # TODO: test running count
     assert wf_state.wf_cancel_req is False
 
 
@@ -65,10 +68,10 @@ def test_get_runnables():
 
     # Test
     expected = {
-        'Task1': {'deps': ['Task3'], 'is_wrapper': False},
-        'Task2': {'deps': ['Task3'], 'is_wrapper': False},
+        'Task1': task_configs['Task1'],
+        'Task2': task_configs['Task2'],
         # TODO: does the wrapper task go here?
-        'Task6': {'deps': ['Task3'], 'is_wrapper': True},
+        'Task6': task_configs['Task6'],
     }
     assert actual == expected
 
@@ -85,7 +88,50 @@ def test_decide():
     uut._decide(state, decisions, task_configs)
 
     # Test
-    # TODO
+    actual = decisions._data
+    expected = [
+        {
+            'decisionType': 'ScheduleActivityTask',
+            'scheduleActivityTaskDecisionAttributes': {
+                'activityId': 'Task2',
+                'activityType': {'name': 'Task2', 'version': 'version1'},
+                'taskList': {'name': 'default'},
+                'scheduleToCloseTimeout': '0',
+                'scheduleToStartTimeout': '0',
+                'startToCloseTimeout': '0',
+                'heartbeatTimeout': '0',
+                'input': json.dumps({
+                    "running_mutex": None,
+                    "schedule_to_start_timeout": 0, "deps": ["Task3"],
+                    "schedule_to_close_timeout": 0, "retries": 0,
+                    "is_wrapper": False, "start_to_close_timeout": 0,
+                    "heartbeat_timeout": 0, "task_list": "default",
+                    "task_family": "Task2"
+                }, default=util.dthandler),
+            },
+        },
+        {
+            'decisionType': 'ScheduleActivityTask',
+            'scheduleActivityTaskDecisionAttributes': {
+                'activityId': 'Task4',
+                'activityType': {'name': 'Task4', 'version': 'version1'},
+                'taskList': {'name': 'default'},
+                'scheduleToCloseTimeout': '0',
+                'scheduleToStartTimeout': '0',
+                'startToCloseTimeout': '0',
+                'heartbeatTimeout': '0',
+                'input': json.dumps({
+                    "running_mutex": None,
+                    "schedule_to_start_timeout": 0, "deps": [],
+                    "schedule_to_close_timeout": 0, "retries": 0,
+                    "is_wrapper": False, "start_to_close_timeout": 0,
+                    "heartbeat_timeout": 0, "task_list": "default",
+                    "task_family": "Task4"
+                }, default=util.dthandler),
+            },
+        },
+    ]
+    assert normalize_decisions(actual) == normalize_decisions(expected)
 
 
 def fixture_events():
@@ -167,32 +213,39 @@ def fixture_task_configs():
     return {
         'Task1': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task1', 'task_list': 'default'},
         'Task2': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task2', 'task_list': 'default'},
         'Task3': {'deps': [], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task3', 'task_list': 'default'},
         'Task4': {'deps': [], 'is_wrapper': False, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task4', 'task_list': 'default'},
         'Task5': {'deps': ['Task1'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task5', 'task_list': 'default'},
         'Task6': {'deps': ['Task3'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task6', 'task_list': 'default'},
         'Task7': {'deps': ['Task6'], 'is_wrapper': True, 'retries': 0,
                   'running_mutex': None, 'start_to_close_timeout': 0,
-                  'schedule_to_start_timeout': 0,
-                  'schedule_to_close_timeout': 0},
+                  'schedule_to_start_timeout': 0, 'heartbeat_timeout': 0,
+                  'schedule_to_close_timeout': 0,
+                  'task_family': 'Task7', 'task_list': 'default'},
     }
 
 
@@ -207,3 +260,17 @@ def fixture_state():
     wf_state.running = []  # TODO
     wf_state.wf_cancel_req = False
     return wf_state
+
+
+def normalize_decisions(decisions):
+    res = []
+    for d in sorted(decisions, key=util.dictsortkey):
+        d = d.copy()
+        if d['decisionType'] == 'ScheduleActivityTask':
+            d['scheduleActivityTaskDecisionAttributes'] = \
+                d['scheduleActivityTaskDecisionAttributes'].copy()
+            d['scheduleActivityTaskDecisionAttributes']['input'] = \
+                json.loads(d['scheduleActivityTaskDecisionAttributes']
+                           ['input'])
+        res.append(d)
+    return res
