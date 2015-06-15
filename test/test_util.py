@@ -49,47 +49,6 @@ def test_get_luigi_params():
     assert params == {'dt': datetime.date(2050, 1, 1)}
 
 
-def test_get_task_configurations():
-    # Setup
-    t = MyTask(dt=datetime.date(2050, 1, 1))
-
-    # Execute
-    all_tasks = util.get_task_configurations(t)
-
-    # Test
-    expected = {
-        'MyDependency(dt=2050-01-01)': {
-            'class': ('test_util', 'MyDependency'),
-            'task_family': 'MyDependency',
-            'deps': [],
-            'task_list': 'default',
-            'params': '{"dt": "2050-01-01"}',
-            'retries': 0,
-            'heartbeat_timeout': 'NONE',
-            'start_to_close_timeout': 'NONE',
-            'schedule_to_start_timeout': 300,
-            'schedule_to_close_timeout': 'NONE',
-            'is_wrapper': False,
-            'running_mutex': None,
-        },
-        'MyTask(dt=2050-01-01)': {
-            'class': ('test_util', 'MyTask'),
-            'task_family': 'MyTask',
-            'deps': ['MyDependency(dt=2050-01-01)'],
-            'task_list': 'default',
-            'params': '{"dt": "2050-01-01"}',
-            'retries': 0,
-            'heartbeat_timeout': 'NONE',
-            'start_to_close_timeout': 'NONE',
-            'schedule_to_start_timeout': 300,
-            'schedule_to_close_timeout': 'NONE',
-            'is_wrapper': False,
-            'running_mutex': None,
-        }
-    }
-    assert all_tasks == expected
-
-
 def test_dt_from_iso():
     # Setup
     iso = '2050-01-02'
