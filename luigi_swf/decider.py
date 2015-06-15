@@ -14,8 +14,9 @@ import daemon
 import luigi.configuration
 from six import iteritems
 
+from .tasks import get_task_configurations
 from .util import default_log_format, dthandler, kill_from_pid_file, \
-    SingleWaitingLockPidFile, get_task_configurations, get_class, dt_from_iso
+    SingleWaitingLockPidFile, get_class, dt_from_iso
 
 
 logger = logging.getLogger(__name__)
@@ -263,6 +264,9 @@ class LuigiSwfDecider(swf.Decider):
                     state.retries.get(task_id, 0):
                 result.append(task_id)
         return result
+
+    def _get_retryables(self, state, task_configs):
+        pass
 
     def _get_task_configurations(self, events):
         wf_event = next(e for e in events

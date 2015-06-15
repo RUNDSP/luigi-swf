@@ -9,8 +9,8 @@ import luigi
 import luigi.configuration
 from six import iteritems, print_
 
-from .util import fullname, get_task_configurations, get_luigi_params, \
-    dthandler
+from .tasks import get_task_configurations
+from .util import fullname, get_luigi_params, dthandler
 
 
 logger = logging.getLogger(__name__)
