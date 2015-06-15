@@ -130,7 +130,7 @@ def get_luigi_params(task):
 default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 
-def get_all_tasks(task, include_obj=False):
+def get_task_configurations(task, include_obj=False):
     deps = task.deps()
     start_to_close = getattr(task, 'swf_start_to_close_timeout', None)
     if start_to_close is None:
@@ -167,12 +167,27 @@ def get_all_tasks(task, include_obj=False):
     if include_obj:
         tasks[task.task_id]['task'] = task
     for dep in deps:
-        tasks.update(get_all_tasks(dep))
+        tasks.update(get_task_configurations(dep))
     return tasks
 
 
 def dt_from_iso(iso):
     return datetime.date(*map(int, iso.split('-')))
+
+
+def dictsortkey(d):
+    """Sortable string key for a dict (Python 3 doesn't do this on its own)"""
+    res = []
+    for k in sorted(d.keys()):
+        res.append(repr(k))
+        res.append('%')
+        if isinstance(d[k], dict):
+            res.append('<')
+            res.append(dictsortkey(d[k]))
+            res.append('>')
+        else:
+            res.append(repr(d[k]))
+    return '|'.join(res)
 
 
 if __name__ == "__main__":

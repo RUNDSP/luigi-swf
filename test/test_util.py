@@ -49,12 +49,12 @@ def test_get_luigi_params():
     assert params == {'dt': datetime.date(2050, 1, 1)}
 
 
-def test_get_all_tasks():
+def test_get_task_configurations():
     # Setup
     t = MyTask(dt=datetime.date(2050, 1, 1))
 
     # Execute
-    all_tasks = util.get_all_tasks(t)
+    all_tasks = util.get_task_configurations(t)
 
     # Test
     expected = {
