@@ -212,6 +212,10 @@ class LuigiSwfDecider(swf.Decider):
             start_to_close = task['start_to_close_timeout']
             schedule_to_start = task['schedule_to_start_timeout']
             schedule_to_close = task['schedule_to_close_timeout']
+            inp = {
+                'class': task['class'],
+                'params': task['params'],
+            }
             decisions.schedule_activity_task(
                 activity_id=task_id,
                 activity_type_name=task['task_family'],
@@ -221,7 +225,7 @@ class LuigiSwfDecider(swf.Decider):
                 start_to_close_timeout=str(start_to_close),
                 schedule_to_start_timeout=str(schedule_to_start),
                 schedule_to_close_timeout=str(schedule_to_close),
-                input=json.dumps(task, default=dthandler))
+                input=json.dumps(inp, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
         if scheduled_count == 0 and len(state.running) == 0:
             if len(unretryables) > 0:
