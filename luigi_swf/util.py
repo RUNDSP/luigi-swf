@@ -175,6 +175,21 @@ def dt_from_iso(iso):
     return datetime.date(*map(int, iso.split('-')))
 
 
+def dictsortkey(d):
+    """Sortable string key for a dict (Python 3 doesn't do this on its own)"""
+    res = []
+    for k in sorted(d.keys()):
+        res.append(repr(k))
+        res.append('%')
+        if isinstance(d[k], dict):
+            res.append('<')
+            res.append(dictsortkey(d[k]))
+            res.append('>')
+        else:
+            res.append(repr(d[k]))
+    return '|'.join(res)
+
+
 if __name__ == "__main__":
     import doctest
     doctest.testmod()
