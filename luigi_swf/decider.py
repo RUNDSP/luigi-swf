@@ -45,7 +45,7 @@ class WfState(object):
         self.failures = self._get_failures(events)
         self.last_fails = self._get_last_fails(events)
         self.timeouts = self._get_timeouts(events)
-        self.retries = self._get_retries(events)
+        self.signaled_retries = self._get_signaled_retries(events)
         self.retry_timers = self._get_retry_timers(events)
         self.wf_cancel_req = self._get_wf_cancel_requested(events)
         self.cancel_requests = self._get_task_cancel_requests(events)
@@ -116,13 +116,13 @@ class WfState(object):
                         for e in events
                         if e['eventType'] == 'ActivityTaskTimedOut'])
 
-    def _get_retries(self, events):
+    def _get_signaled_retries(self, events):
         def parse_retries(task_ids):
             try:
                 return map(lambda s: s.strip(), task_ids.strip().split('\n'))
             except:
                 tb = traceback.format_exc()
-                logger.error('get_wf_state_full._get_retries'
+                logger.error('get_wf_state_full._get_signaled_retries'
                              '.parse_retries():\n%s', tb)
                 return []
 
@@ -229,15 +229,15 @@ class LuigiSwfDecider(swf.Decider):
 
     def _schedule_activities(self, state, decisions, task_configs, now):
         scheduled = []
-        runnables = self._get_runnables(state, task_configs)
+        deps_met = self._get_deps_met(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
         retryables, waitables, unretryables = \
             self._get_retryables(state, task_configs, now)
         self._schedule_retries(waitables, decisions)
-        for task_id in runnables:
-            task = task_configs[task_id]
-            if task_id in unretryables:
+        for task_id in deps_met:
+            if task_id in unretryables + list(waitables.keys()):
                 continue
+            task = task_configs[task_id]
             if task['running_mutex'] is not None:
                 # These tasks want to run one-at-a-time per workflow execution.
                 if task['running_mutex'] in running_mutexes:
@@ -288,7 +288,7 @@ class LuigiSwfDecider(swf.Decider):
         else:
             decisions.cancel_workflow_executions()
 
-    def _get_runnables(self, state, task_configs):
+    def _get_deps_met(self, state, task_configs):
         result = []
         for task_id, task in iteritems(task_configs):
             if task_id not in state.completed and \
@@ -301,7 +301,7 @@ class LuigiSwfDecider(swf.Decider):
         retryables, waitables, unretryables = [], {}, []
         for task_id, count in iteritems(state.failures):
             retry_wait = task_configs[task_id]['retries'].get_retry_wait(
-                count - state.retries.get(task_id, 0))
+                count - state.signaled_retries.get(task_id, 0))
             if retry_wait is not None:
                 retry_time = state.last_fails[task_id] + \
                     datetime.timedelta(seconds=retry_wait)

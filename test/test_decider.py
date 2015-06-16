@@ -38,7 +38,7 @@ def test_read_wf_state():
     assert wf_state.completed == ['Task3', 'Task6', 'Task7']
     assert wf_state.failures == {'Task1': 1}
     assert wf_state.timeouts == {'Task1': 1}
-    assert wf_state.retries == {'Task6': 1}
+    assert wf_state.signaled_retries == {'Task6': 1}
     assert wf_state.running == []  # TODO: test running count
     assert wf_state.wf_cancel_req is False
 
@@ -56,7 +56,7 @@ def test_get_wf_cancel_requested():
     assert actual == expected
 
 
-def test_get_runnables():
+def test_get_deps_met():
     # Setup
     state = decider.WfState()
     state.completed = ['Task3']
@@ -66,7 +66,7 @@ def test_get_runnables():
     uut = decider.LuigiSwfDecider()
 
     # Execute
-    actual = set(uut._get_runnables(state, task_configs))
+    actual = set(uut._get_deps_met(state, task_configs))
 
     # Test
     # TODO: do wrapper tasks (Task6) go here?
@@ -140,6 +140,64 @@ def test_decide():
                 'input': json.dumps({
                     'class': ('aoeu', 'Task4'), 'params': {}
                 }, default=util.dthandler),
+            },
+        },
+    ]
+    assert normalize_decisions(actual) == normalize_decisions(expected)
+
+
+def test_wait():
+    # Setup
+    state = fixture_state()
+    task_configs = fixture_task_configs()
+    task_configs['Task1']['retries'] = tasks.RetryWait(wait=100)
+    decisions = swf.Layer1Decisions()
+    decider.LuigiSwfDecider.__init__ = lambda s: None
+    uut = decider.LuigiSwfDecider()
+    now = datetime.datetime.utcfromtimestamp(20.0)
+
+    # Execute
+    uut._decide(state, decisions, task_configs, now)
+
+    # Test
+    actual = decisions._data
+    expected = [
+        {
+            'decisionType': 'ScheduleActivityTask',
+            'scheduleActivityTaskDecisionAttributes': {
+                'activityId': 'Task2',
+                'activityType': {'name': 'Task2', 'version': 'version1'},
+                'taskList': {'name': 'default'},
+                'scheduleToCloseTimeout': '0',
+                'scheduleToStartTimeout': '0',
+                'startToCloseTimeout': '0',
+                'heartbeatTimeout': '0',
+                'input': json.dumps({
+                    'class': ('aoeu', 'Task2'), 'params': {}
+                }, default=util.dthandler),
+            },
+        },
+        {
+            'decisionType': 'ScheduleActivityTask',
+            'scheduleActivityTaskDecisionAttributes': {
+                'activityId': 'Task4',
+                'activityType': {'name': 'Task4', 'version': 'version1'},
+                'taskList': {'name': 'default'},
+                'scheduleToCloseTimeout': '0',
+                'scheduleToStartTimeout': '0',
+                'startToCloseTimeout': '0',
+                'heartbeatTimeout': '0',
+                'input': json.dumps({
+                    'class': ('aoeu', 'Task4'), 'params': {}
+                }, default=util.dthandler),
+            },
+        },
+        {
+            'decisionType': 'StartTimer',
+            'startTimerDecisionAttributes': {
+                'control': 'Task1',
+                'startToFireTimeout': 86.0,
+                'timerId': 'retry-Task1',
             },
         },
     ]
@@ -285,7 +343,7 @@ def fixture_state():
     wf_state.failures = {'Task1': 1}
     wf_state.last_fails = {'Task1': datetime.datetime.utcfromtimestamp(5.0)}
     wf_state.timeouts = {'Task1': 1}
-    wf_state.retries = {'Task6': 1}
+    wf_state.signaled_retries = {'Task6': 1}
     wf_state.running = []  # TODO
     wf_state.wf_cancel_req = False
     wf_state.waiting = []  # TODO
