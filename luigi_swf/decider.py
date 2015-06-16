@@ -198,7 +198,8 @@ class LuigiSwfDecider(swf.Decider):
             task_configs = self._get_task_configurations(events)
             state = WfState()
             state.read_wf_state(events, task_configs)
-            self._decide()
+            now = datetime.datetime.utcnow()
+            self._decide(now)
             self.complete(decisions=decisions)
         except Exception as error:
             tb = traceback.format_exc()
@@ -210,9 +211,9 @@ class LuigiSwfDecider(swf.Decider):
             self.complete(decisions=decisions)
             raise
 
-    def _decide(self, state, decisions, task_configs):
+    def _decide(self, state, decisions, task_configs, now):
         if not state.wf_cancel_req:
-            self._schedule_activities(state, decisions, task_configs)
+            self._schedule_activities(state, decisions, task_configs, now)
         else:
             self._cancel_activities(state, decisions)
 
@@ -226,11 +227,10 @@ class LuigiSwfDecider(swf.Decider):
                 events += decision_task['events']
         return events
 
-    def _schedule_activities(self, state, decisions, task_configs):
+    def _schedule_activities(self, state, decisions, task_configs, now):
         scheduled = []
         runnables = self._get_runnables(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
-        now = datetime.datetime.utcnow()
         retryables, waitables, unretryables = \
             self._get_retryables(state, task_configs, now)
         self._schedule_retries(waitables, decisions)
@@ -275,7 +275,7 @@ class LuigiSwfDecider(swf.Decider):
                 decisions.complete_workflow_execution()
 
     def _schedule_retries(self, waitables, decisions):
-        for task_id, wait in waitables:
+        for task_id, wait in iteritems(waitables):
             decisions.start_timer(wait + 1 * seconds,
                                   'retry-{}'.format(task_id),
                                   task_id)
@@ -294,14 +294,6 @@ class LuigiSwfDecider(swf.Decider):
             if task_id not in state.completed and \
                     task_id not in state.running and \
                     all(d in state.completed for d in task['deps']):
-                result.append(task_id)
-        return result
-
-    def _get_unretryables(self, state, task_configs):
-        result = []
-        for task_id, count in iteritems(state.failures):
-            if count > task_configs[task_id]['retries'] + \
-                    state.retries.get(task_id, 0):
                 result.append(task_id)
         return result
 

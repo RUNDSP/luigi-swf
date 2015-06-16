@@ -1,3 +1,4 @@
+import datetime
 import json
 from pprint import pformat
 
@@ -73,6 +74,29 @@ def test_get_runnables():
     assert actual == expected
 
 
+def test_get_retryables():
+    # Setup
+    state = fixture_state()
+    task_configs = fixture_task_configs()
+    task_configs['Task1']['retries'] = tasks.RetryWait(wait=100)
+    decider.LuigiSwfDecider.__init__ = lambda s: None
+    uut = decider.LuigiSwfDecider()
+    now_s = 20.0
+    now = datetime.datetime.utcfromtimestamp(now_s)
+
+    # Execute
+    actual = uut._get_retryables(state, task_configs, now)
+
+    # Test
+    a_retryables, a_waitables, a_unretryables = actual
+    e_retryables = []
+    assert a_retryables == e_retryables
+    e_waitables = {'Task1': 5 + 100 - now_s}
+    assert a_waitables == e_waitables
+    e_unretryables = []
+    assert a_unretryables == e_unretryables
+
+
 def test_decide():
     # Setup
     state = fixture_state()
@@ -80,9 +104,10 @@ def test_decide():
     decisions = swf.Layer1Decisions()
     decider.LuigiSwfDecider.__init__ = lambda s: None
     uut = decider.LuigiSwfDecider()
+    now = datetime.datetime.utcfromtimestamp(20.0)
 
     # Execute
-    uut._decide(state, decisions, task_configs)
+    uut._decide(state, decisions, task_configs, now)
 
     # Test
     actual = decisions._data
@@ -258,6 +283,7 @@ def fixture_state():
     wf_state.schedulings = {'Task3': 1, 'Task1': 2}
     wf_state.completed = ['Task3', 'Task6', 'Task7']
     wf_state.failures = {'Task1': 1}
+    wf_state.last_fails = {'Task1': datetime.datetime.utcfromtimestamp(5.0)}
     wf_state.timeouts = {'Task1': 1}
     wf_state.retries = {'Task6': 1}
     wf_state.running = []  # TODO
