@@ -3,7 +3,7 @@ from pprint import pformat
 
 import boto.swf.layer2 as swf
 
-from luigi_swf import decider, util
+from luigi_swf import decider, tasks, util
 
 
 def test_get_task_id():
@@ -65,15 +65,11 @@ def test_get_runnables():
     uut = decider.LuigiSwfDecider()
 
     # Execute
-    actual = uut._get_runnables(state, task_configs)
+    actual = set(uut._get_runnables(state, task_configs))
 
     # Test
-    expected = {
-        'Task1': task_configs['Task1'],
-        'Task2': task_configs['Task2'],
-        # TODO: does the wrapper task go here?
-        'Task6': task_configs['Task6'],
-    }
+    # TODO: do wrapper tasks (Task6) go here?
+    expected = set(('Task1', 'Task2', 'Task6'))
     assert actual == expected
 
 
@@ -129,6 +125,7 @@ def fixture_events():
     return [
         {
             'eventId': 1,
+            'eventTimestamp': 1.0,
             'eventType': 'WorkflowExecutionStarted',
             'workflowExecutionStartedEventAttributes': {
                 'workflowType': {
@@ -138,6 +135,7 @@ def fixture_events():
         },
         {
             'eventId': 2,
+            'eventTimestamp': 2.0,
             'eventType': 'ActivityTaskScheduled',
             'activityTaskScheduledEventAttributes': {
                 'activityId': 'Task3',
@@ -145,6 +143,7 @@ def fixture_events():
         },
         {
             'eventId': 3,
+            'eventTimestamp': 3.0,
             'eventType': 'ActivityTaskCompleted',
             'activityTaskCompletedEventAttributes': {
                 'scheduledEventId': 2,  # Task3
@@ -152,6 +151,7 @@ def fixture_events():
         },
         {
             'eventId': 4,
+            'eventTimestamp': 4.0,
             'eventType': 'ActivityTaskScheduled',
             'activityTaskScheduledEventAttributes': {
                 'activityId': 'Task1',
@@ -159,6 +159,7 @@ def fixture_events():
         },
         {
             'eventId': 5,
+            'eventTimestamp': 5.0,
             'eventType': 'ActivityTaskFailed',
             'activityTaskFailedEventAttributes': {
                 'scheduledEventId': 4,  # Task1
@@ -166,6 +167,7 @@ def fixture_events():
         },
         {
             'eventId': 6,
+            'eventTimestamp': 6.0,
             'eventType': 'ActivityTaskScheduled',
             'activityTaskScheduledEventAttributes': {
                 'activityId': 'Task1',
@@ -173,6 +175,7 @@ def fixture_events():
         },
         {
             'eventId': 7,
+            'eventTimestamp': 7.0,
             'eventType': 'ActivityTaskTimedOut',
             'activityTaskTimedOutEventAttributes': {
                 'scheduledEventId': 6,  # Task1
@@ -180,6 +183,7 @@ def fixture_events():
         },
         {
             'eventId': 8,
+            'eventTimestamp': 8.0,
             'eventType': 'WorkflowExecutionSignaled',
             'workflowExecutionSignaledEventAttributes': {
                 'signalName': 'retry',
@@ -201,44 +205,45 @@ def fixture_events_cancel_requested():
 
 
 def fixture_task_configs():
+    no_retry = tasks.RetryWait(max_failures=0)
     return {
-        'Task1': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
+        'Task1': {'deps': ['Task3'], 'is_wrapper': False, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task1', 'task_list': 'default',
                   'class': ('aoeu', 'Task1'), 'params': {}},
-        'Task2': {'deps': ['Task3'], 'is_wrapper': False, 'retries': 0,
+        'Task2': {'deps': ['Task3'], 'is_wrapper': False, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task2', 'task_list': 'default',
                   'class': ('aoeu', 'Task2'), 'params': {}},
-        'Task3': {'deps': [], 'is_wrapper': False, 'retries': 0,
+        'Task3': {'deps': [], 'is_wrapper': False, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task3', 'task_list': 'default',
                   'class': ('aoeu', 'Task3'), 'params': {}},
-        'Task4': {'deps': [], 'is_wrapper': False, 'retries': 0,
+        'Task4': {'deps': [], 'is_wrapper': False, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task4', 'task_list': 'default',
                   'class': ('aoeu', 'Task4'), 'params': {}},
-        'Task5': {'deps': ['Task1'], 'is_wrapper': True, 'retries': 0,
+        'Task5': {'deps': ['Task1'], 'is_wrapper': True, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task5', 'task_list': 'default',
                   'class': ('aoeu', 'Task5'), 'params': {}},
-        'Task6': {'deps': ['Task3'], 'is_wrapper': True, 'retries': 0,
+        'Task6': {'deps': ['Task3'], 'is_wrapper': True, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'heartbeat_timeout': 0, 'schedule_to_start_timeout': 0,
                   'schedule_to_close_timeout': 0,
                   'task_family': 'Task6', 'task_list': 'default',
                   'class': ('aoeu', 'Task6'), 'params': {}},
-        'Task7': {'deps': ['Task6'], 'is_wrapper': True, 'retries': 0,
+        'Task7': {'deps': ['Task6'], 'is_wrapper': True, 'retries': no_retry,
                   'running_mutex': None, 'start_to_close_timeout': 0,
                   'schedule_to_start_timeout': 0, 'heartbeat_timeout': 0,
                   'schedule_to_close_timeout': 0,
