@@ -23,11 +23,9 @@ See the task_basic.py example and `luigi_swf.cw` module for more details.
 
 ### Per-task retry configuration
 
-Via the `swf_retries` task attribute. See the task_basic.py example. Future
-development will introduce an exponential backoff strategy to retry forever.
-Per-task monitoring via CloudWatch enables you to get alerts early in the
-retry cycle anyway. Until then, if a workflow is still running but a task
-has run out of retries, you can add a retry by signaling the workflow execution
+Via the `swf_retries` task attribute. See the task_basic.py example.
+Supported strategies are waiting a fixed or exponential amount of time.
+You can also add a retry at run-time by signaling the workflow execution
 with action "retry" and put the task ID in the message section.
 
 ### Running-mutex
