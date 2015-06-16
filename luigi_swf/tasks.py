@@ -155,13 +155,23 @@ class RetryWait(RetryBase):
 class RetryExponential(RetryBase):
     """Retry in `base ** failures` seconds up to `max_failures - 1` times."""
 
-    def __init__(self, base=2.0, max_failures=None):
-        self.base = base
+    def __init__(self, base=2.0, max_wait=30 * minutes, max_failures=None):
+        """
+        :param base: base of exponentiation
+        :type base: float
+        :param max_wait: Max time to wait before retrying (in seconds)
+        :type max_wait: int
+        :param max_failures: Max attempts before giving up
+        :type max_failures: int or None
+        """
+        self.base = float(base)
+        self.max_wait = int(max_wait)
         self.max_failures = max_failures
 
     def get_retry_wait(self, failures):
         if self.max_failures is None or failures < self.max_failures:
-            return int(self.base ** failures)
+            t = int(self.base ** failures)
+            return min(t, self.max_wait)
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) \
