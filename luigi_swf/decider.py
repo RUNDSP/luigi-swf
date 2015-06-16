@@ -1,4 +1,5 @@
 from collections import Counter
+import datetime
 import json
 import logging
 import os
@@ -42,6 +43,7 @@ class WfState(object):
         self.schedulings = self._get_all_schedulings(events)
         self.completed = self._get_completed(events, task_configs)
         self.failures = self._get_failures(events)
+        self.last_fails = self._get_last_fails(events)
         self.timeouts = self._get_timeouts(events)
         self.retries = self._get_retries(events)
         self.wf_cancel_req = self._get_wf_cancel_requested(events)
@@ -49,6 +51,7 @@ class WfState(object):
         self.cancellations = self._get_activity_cancellations(events)
         # Make inferences.
         self.running = self._get_running()
+        self.waiting = self._get_waiting()
 
     def _get_version(self, events):
         wf_event = next(e for e in events
@@ -93,6 +96,19 @@ class WfState(object):
         return Counter([self._get_task_id(events, e[attrTaskFailed])
                         for e in events
                         if e['eventType'] == 'ActivityTaskFailed'])
+
+    def _get_last_fails(self, events):
+        last_fails = {}
+        for e in events:
+            if e['eventType'] == 'ActivityTaskFailed':
+                task_id = self._get_task_id(events, e[attrTaskFailed])
+                fail_time = datetime.datetime.utcfromtimestamp(
+                    e['eventTimestamp'])
+                if task_id in last_fails:
+                    last_fails[task_id] = max(last_fails[task_id], fail_time)
+                else:
+                    last_fails[task_id] = fail_time
+        return last_fails
 
     def _get_timeouts(self, events):
         return Counter([self._get_task_id(events, e[attrTaskTimedOut])
@@ -140,6 +156,9 @@ class WfState(object):
                  sched_count > (self.failures[task_id]
                                 + self.timeouts[task_id]
                                 + self.cancellations[task_id]))]
+
+    def _get_waiting(self):
+        return []  # TODO
 
 
 class LuigiSwfDecider(swf.Decider):
@@ -200,8 +219,12 @@ class LuigiSwfDecider(swf.Decider):
         scheduled_count = 0
         runnables = self._get_runnables(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
-        unretryables = self._get_unretryables(state, task_configs)
-        for task_id, task in iteritems(runnables):
+        now = datetime.datetime.utcnow()
+        retryables, waitables, unretryables = \
+            self._get_retryables(state, task_configs, now)
+        self._schedule_retries(waitables, decisions)
+        for task_id in runnables:
+            task = task_configs[task_id]
             if task_id in unretryables:
                 continue
             if task['running_mutex'] is not None:
@@ -240,6 +263,9 @@ class LuigiSwfDecider(swf.Decider):
                              'completing workflow')
                 decisions.complete_workflow_execution()
 
+    def _schedule_retries(self, waitables, decisions):
+        pass  # TODO
+
     def _cancel_activities(self, state, decisions):
         if len(state.running) > 0:
             for task_id in state.running:
@@ -249,12 +275,12 @@ class LuigiSwfDecider(swf.Decider):
             decisions.cancel_workflow_executions()
 
     def _get_runnables(self, state, task_configs):
-        result = {}
+        result = []
         for task_id, task in iteritems(task_configs):
             if task_id not in state.completed and \
                     task_id not in state.running and \
                     all(d in state.completed for d in task['deps']):
-                result[task_id] = task
+                result.append(task_id)
         return result
 
     def _get_unretryables(self, state, task_configs):
@@ -265,8 +291,21 @@ class LuigiSwfDecider(swf.Decider):
                 result.append(task_id)
         return result
 
-    def _get_retryables(self, state, task_configs):
-        pass
+    def _get_retryables(self, state, task_configs, now):
+        retryables, waitables, unretryables = [], {}, []
+        for task_id, count in iteritems(state.failures):
+            retry_wait = task_configs[task_id]['retries'].get_retry_wait(
+                count - state.retries.get(task_id, 0))
+            if retry_wait is not None:
+                retry_time = state.last_fails[task_id] + \
+                    datetime.timedelta(seconds=retry_wait)
+                if retry_wait == 0 or now >= retry_time:
+                    retryables.append(task_id)
+                elif task_id not in state.waiting:
+                    waitables[task_id] = retry_wait
+            else:
+                unretryables.append(task_id)
+        return retryables, waitables, unretryables
 
     def _get_task_configurations(self, events):
         wf_event = next(e for e in events
