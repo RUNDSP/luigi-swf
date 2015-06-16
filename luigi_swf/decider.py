@@ -46,6 +46,7 @@ class WfState(object):
         self.last_fails = self._get_last_fails(events)
         self.timeouts = self._get_timeouts(events)
         self.retries = self._get_retries(events)
+        self.retry_timers = self._get_retry_timers(events)
         self.wf_cancel_req = self._get_wf_cancel_requested(events)
         self.cancel_requests = self._get_task_cancel_requests(events)
         self.cancellations = self._get_activity_cancellations(events)
@@ -133,6 +134,13 @@ class WfState(object):
              for retry in parse_retries(e[attrWfSignaled]['input'])]
         return Counter(retries_flat)
 
+    def _get_retry_timers(self, events):
+        return Counter([e['timerStartedEventAttributes']['control']
+                        for e in events
+                        if e['eventType'] == 'TimerStarted'
+                        and e['timerStartedEventAttributes']['timerId']
+                        .startswith('retry')])
+
     def _get_wf_cancel_requested(self, events):
         return any(e for e in events
                    if e['eventType'] == 'WorkflowExecutionCancelRequested')
@@ -158,7 +166,10 @@ class WfState(object):
                                 + self.cancellations[task_id]))]
 
     def _get_waiting(self):
-        return []  # TODO
+        return [task_id
+                for task_id, timer_count
+                in iteritems(self.retry_timers)
+                if timer_count > self.schedulings[task_id]]
 
 
 class LuigiSwfDecider(swf.Decider):
@@ -216,7 +227,7 @@ class LuigiSwfDecider(swf.Decider):
         return events
 
     def _schedule_activities(self, state, decisions, task_configs):
-        scheduled_count = 0
+        scheduled = []
         runnables = self._get_runnables(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
         now = datetime.datetime.utcnow()
@@ -232,7 +243,7 @@ class LuigiSwfDecider(swf.Decider):
                 if task['running_mutex'] in running_mutexes:
                     continue
                 running_mutexes.add(task['running_mutex'])
-            scheduled_count += 1
+            scheduled.append(task_id)
             start_to_close = task['start_to_close_timeout']
             schedule_to_start = task['schedule_to_start_timeout']
             schedule_to_close = task['schedule_to_close_timeout']
@@ -251,7 +262,7 @@ class LuigiSwfDecider(swf.Decider):
                 schedule_to_close_timeout=str(schedule_to_close),
                 input=json.dumps(inp, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
-        if scheduled_count == 0 and len(state.running) == 0:
+        if len(scheduled + state.running + state.waiting) == 0:
             if len(unretryables) > 0:
                 msg = 'Task(s) failed: ' + ', '.join(unretryables)
                 logger.error('LuigiSwfDecider().run(), '
@@ -264,7 +275,10 @@ class LuigiSwfDecider(swf.Decider):
                 decisions.complete_workflow_execution()
 
     def _schedule_retries(self, waitables, decisions):
-        pass  # TODO
+        for task_id, wait in waitables:
+            decisions.start_timer(wait + 1 * seconds,
+                                  'retry-{}'.format(task_id),
+                                  task_id)
 
     def _cancel_activities(self, state, decisions):
         if len(state.running) > 0:
@@ -302,7 +316,8 @@ class LuigiSwfDecider(swf.Decider):
                 if retry_wait == 0 or now >= retry_time:
                     retryables.append(task_id)
                 elif task_id not in state.waiting:
-                    waitables[task_id] = retry_wait
+                    waitables[task_id] = \
+                        int((retry_time - now).total_seconds())
             else:
                 unretryables.append(task_id)
         return retryables, waitables, unretryables

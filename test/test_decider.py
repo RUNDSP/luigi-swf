@@ -262,6 +262,7 @@ def fixture_state():
     wf_state.retries = {'Task6': 1}
     wf_state.running = []  # TODO
     wf_state.wf_cancel_req = False
+    wf_state.waiting = []  # TODO
     return wf_state
 
 
