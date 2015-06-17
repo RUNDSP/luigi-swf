@@ -262,7 +262,8 @@ class LuigiSwfDecider(swf.Decider):
                 schedule_to_close_timeout=str(schedule_to_close),
                 input=json.dumps(inp, default=dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
-        if len(scheduled + state.running + state.waiting) == 0:
+        if len(scheduled + state.running + state.waiting
+               + list(waitables.keys())) == 0:
             if len(unretryables) > 0:
                 msg = 'Task(s) failed: ' + ', '.join(unretryables)
                 logger.error('LuigiSwfDecider().run(), '
