@@ -91,7 +91,7 @@ def get_task_configurations(task, include_obj=False):
     retries = getattr(task, 'swf_retries', 0)
     if not isinstance(retries, RetryBase):
         assert isinstance(retries, int)
-        retries = RetryWait(max_failures=retries)
+        retries = RetryWait(max_failures=retries + 1)
     tasks = {
         task.task_id: {
             'class': util.fullname(task),
