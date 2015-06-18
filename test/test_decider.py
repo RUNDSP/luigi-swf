@@ -196,7 +196,7 @@ def test_wait():
             'decisionType': 'StartTimer',
             'startTimerDecisionAttributes': {
                 'control': 'Task1',
-                'startToFireTimeout': 86.0,
+                'startToFireTimeout': '86',
                 'timerId': 'retry-Task1',
             },
         },
