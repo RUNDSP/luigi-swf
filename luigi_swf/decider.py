@@ -25,6 +25,7 @@ pp = pprint.PrettyPrinter(indent=2)
 
 
 attrTaskScheduled = 'activityTaskScheduledEventAttributes'
+attrTaskStarted = 'activityTaskStartedEventAttributes'
 attrTaskCompleted = 'activityTaskCompletedEventAttributes'
 attrTaskFailed = 'activityTaskFailedEventAttributes'
 attrTaskTimedOut = 'activityTaskTimedOutEventAttributes'
@@ -35,88 +36,42 @@ attrWfSignaled = 'workflowExecutionSignaledEventAttributes'
 seconds = 1.
 
 
+def retry_timer_name(task_id):
+    # We want to be able to see the task name for debugging, but sanitizing
+    # it for the API could cause collisions, so we also include a hash.
+    # 32-bit vs 64-bit: all deciders should run on the same for the hash.
+    h = str(hash(task_id))
+    tid = task_id \
+        .replace('\\', '_') \
+        .replace(':', '_') \
+        .replace('|', '_') \
+        .replace('arn', 'ARN')
+    return 'retry-{}-{}'.format(h, tid)[:256]
+
+
+class SWFEventHistoryCorruptedException(Exception):
+    pass
+
+
 class WfState(object):
 
+    def __init__(self):
+        self.version = None
+        self.schedule_events = {}
+        self.running = set()
+        self.completed = set()
+        self.schedulings = Counter()
+        self.failures = Counter()
+        self.last_fails = {}
+        self.timeouts = Counter()
+        self.retries = Counter()
+        self.waiting = set()
+        self.wf_cancel_req = False
+        self.cancellations = Counter()
+        self.cancel_requests = Counter()
+        self.open_retry_timers = set()  # analogous to self.waiting
+
     def read_wf_state(self, events, task_configs):
-        # Read what has happened.
-        self.version = self._get_version(events)
-        self.schedulings = self._get_all_schedulings(events)
-        self.completed = self._get_completed(events, task_configs)
-        self.failures = self._get_failures(events)
-        self.last_fails = self._get_last_fails(events)
-        self.timeouts = self._get_timeouts(events)
-        self.signaled_retries = self._get_signaled_retries(events)
-        self.retry_timers = self._get_retry_timers(events)
-        self.wf_cancel_req = self._get_wf_cancel_requested(events)
-        self.cancel_requests = self._get_task_cancel_requests(events)
-        self.cancellations = self._get_activity_cancellations(events)
-        # Make inferences.
-        self.running = self._get_running()
-        self.waiting = self._get_waiting()
-
-    def _get_version(self, events):
-        wf_event = next(e for e in events
-                        if e['eventType'] == 'WorkflowExecutionStarted')
-        wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
-        return wf_event_attr['workflowType']['version']
-
-    def _get_task_id(self, events, event_attributes):
-        event_id = event_attributes['scheduledEventId'] - 1
-        activity = events[event_id]
-        attributes = activity['activityTaskScheduledEventAttributes']
-        return attributes['activityId']
-
-    def _get_all_schedulings(self, events):
-        all_schedulings = \
-            [e[attrTaskScheduled]['activityId']
-             for e in events
-             if e['eventType'] == 'ActivityTaskScheduled']
-        return Counter(all_schedulings)
-
-    def _get_completed(self, events, task_configs):
-        # Get completed activity tasks.
-        compl_act = [self._get_task_id(events, e[attrTaskCompleted])
-                     for e in events
-                     if e['eventType'] == 'ActivityTaskCompleted']
-        # Get completed wrappers.
-        # Iterate so wrappers can depend on one another.
-        completed_wrappers = []
-        while True:
-            completed = compl_act + completed_wrappers
-            new_comp = [task_id
-                        for task_id, task in iteritems(task_configs)
-                        if (task['is_wrapper']
-                            and task_id not in completed
-                            and all(t in completed for t in task['deps']))]
-            if len(new_comp) == 0:
-                break
-            completed_wrappers += new_comp
-        return compl_act + completed_wrappers
-
-    def _get_failures(self, events):
-        return Counter([self._get_task_id(events, e[attrTaskFailed])
-                        for e in events
-                        if e['eventType'] == 'ActivityTaskFailed'])
-
-    def _get_last_fails(self, events):
-        last_fails = {}
-        for e in events:
-            if e['eventType'] == 'ActivityTaskFailed':
-                task_id = self._get_task_id(events, e[attrTaskFailed])
-                fail_time = datetime.datetime.utcfromtimestamp(
-                    e['eventTimestamp'])
-                if task_id in last_fails:
-                    last_fails[task_id] = max(last_fails[task_id], fail_time)
-                else:
-                    last_fails[task_id] = fail_time
-        return last_fails
-
-    def _get_timeouts(self, events):
-        return Counter([self._get_task_id(events, e[attrTaskTimedOut])
-                        for e in events
-                        if e['eventType'] == 'ActivityTaskTimedOut'])
-
-    def _get_signaled_retries(self, events):
         def parse_retries(task_ids):
             try:
                 return map(lambda s: s.strip(), task_ids.strip().split('\n'))
@@ -126,50 +81,115 @@ class WfState(object):
                              '.parse_retries():\n%s', tb)
                 return []
 
-        retries_flat = \
-            [retry
-             for e in events
-             if (e['eventType'] == 'WorkflowExecutionSignaled'
-                 and e[attrWfSignaled]['signalName'] == 'retry')
-             for retry in parse_retries(e[attrWfSignaled]['input'])]
-        return Counter(retries_flat)
-
-    def _get_retry_timers(self, events):
-        return Counter([e['timerStartedEventAttributes']['control']
-                        for e in events
-                        if e['eventType'] == 'TimerStarted'
-                        and e['timerStartedEventAttributes']['timerId']
-                        .startswith('retry')])
-
-    def _get_wf_cancel_requested(self, events):
-        return any(e for e in events
-                   if e['eventType'] == 'WorkflowExecutionCancelRequested')
-
-    def _get_task_cancel_requests(self, events):
-        return [e[attrTaskCancReq]['activityId']
-                for e in events
-                if e['eventType'] == 'ActivityTaskCancelRequested']
-
-    def _get_activity_cancellations(self, events):
-        return Counter([self._get_task_id(events, e[attrTaskCanceled])
-                        for e in events
-                        if e['eventType'] == 'ActivityTaskCanceled'])
-
-    def _get_running(self):
-        return \
-            [task_id
-             for task_id, sched_count
-             in iteritems(self.schedulings)
-             if (task_id not in self.completed and
-                 sched_count > (self.failures[task_id]
-                                + self.timeouts[task_id]
-                                + self.cancellations[task_id]))]
-
-    def _get_waiting(self):
-        return [task_id
-                for task_id, timer_count
-                in iteritems(self.retry_timers)
-                if timer_count > self.schedulings[task_id]]
+        for e in events:
+            if e['eventType'] == 'WorkflowExecutionStarted':
+                self.version = (e['workflowExecutionStartedEventAttributes']
+                                ['workflowType']['version'])
+            elif e['eventType'] == 'ActivityTaskScheduled':
+                tid = e['activityTaskScheduledEventAttributes']['activityId']
+                self.schedule_events[e['eventId']] = tid
+                self.schedulings[tid] += 1
+            elif e['eventType'] == 'ActivityTaskScheduled':
+                tid = e[attrTaskScheduled]['activityId']
+                if tid in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) scheduled task was already running: {}'
+                        .format(e['eventId'], repr(tid)))
+                if tid in self.waiting:
+                    self.waiting.remove(tid)
+            elif e['eventType'] == 'ActivityTaskStarted':
+                seid = e[attrTaskStarted]['scheduledEventId']
+                tid = self.schedule_events[seid]
+                if tid in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) started task was already running: {}'
+                        .format(e['eventId'], repr(tid)))
+                self.running.add(tid)
+                if tid in self.waiting:
+                    self.waiting.remove(tid)
+            elif e['eventType'] == 'ActivityTaskCompleted':
+                seid = e[attrTaskCompleted]['scheduledEventId']
+                tid = self.schedule_events[seid]
+                if tid not in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) completed task was not running: {}'
+                        .format(e['eventId'], repr(tid)))
+                self.running.remove(tid)
+                self.completed.add(tid)
+            elif e['eventType'] == 'ActivityTaskFailed':
+                seid = e[attrTaskFailed]['scheduledEventId']
+                tid = self.schedule_events[seid]
+                if tid not in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) failed task was not running: {}'
+                        .format(e['eventId'], repr(tid)))
+                self.running.remove(tid)
+                self.failures[tid] += 1
+                fail_time = datetime.datetime.utcfromtimestamp(
+                    e['eventTimestamp'])
+                if tid in self.last_fails:
+                    self.last_fails[tid] = max(self.last_fails[tid], fail_time)
+                else:
+                    self.last_fails[tid] = fail_time
+            elif e['eventType'] == 'ActivityTaskTimedOut':
+                seid = e[attrTaskTimedOut]['scheduledEventId']
+                tid = self.schedule_events[seid]
+                if tid not in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) timed out task was not running: {}'
+                        .format(e['eventId'], repr(tid)))
+                self.timeouts[tid] += 1
+                self.running.remove(tid)
+            elif e['eventType'] == 'TimerStarted':
+                tid = e['timerStartedEventAttributes']['control']
+                timer = e['timerStartedEventAttributes']['timerId']
+                if tid in self.running:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) timer task was running: {}'
+                        .format(e['eventId'], repr(tid)))
+                if tid in self.waiting:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) timer task was already waiting: {}'
+                        .format(e['eventId'], repr(tid)))
+                if timer in self.open_retry_timers:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) started timer was running: {}'
+                        .format(e['eventId'], repr(timer)))
+                self.waiting.add(tid)
+                self.open_retry_timers.add(timer)
+            elif e['eventType'] == 'TimerFired':
+                timer = e['timerFiredEventAttributes']['timerId']
+                if timer not in self.open_retry_timers:
+                    raise SWFEventHistoryCorruptedException(
+                        '(eventId={}) fired timer had not started: {}'
+                        .format(e['eventId'], repr(timer)))
+                self.open_retry_timers.remove(timer)
+            elif e['eventType'] == 'WorkflowExecutionSignaled':
+                if e[attrWfSignaled]['signalName'] == 'retry':
+                    for retry in parse_retries(e[attrWfSignaled]['input']):
+                        self.retries[retry] += 1
+            elif e['eventType'] == 'WorkflowExecutionCancelRequested':
+                self.wf_cancel_req = True
+            elif e['eventType'] == 'ActivityTaskCancelRequested':
+                tid = e[attrTaskCancReq]['activityId']
+                self.cancel_requests[tid] += 1
+            elif e['eventType'] == 'ActivityTaskCanceled':
+                tid = e[attrTaskCanceled]['activityId']
+                if tid in self.running:
+                    self.running.remove(tid)
+                self.cancellations[tid] += 1
+        # Get completed wrappers.
+        # Iterate so wrappers can depend on one another.
+        while True:
+            new_comp = [task_id
+                        for task_id, task in iteritems(task_configs)
+                        if (task['is_wrapper']
+                            and task_id not in self.completed
+                            and all(t in self.completed for t in task['deps']))
+                        ]
+            if len(new_comp) == 0:
+                break
+            self.completed |= set(new_comp)
 
 
 class LuigiSwfDecider(swf.Decider):
@@ -280,11 +300,7 @@ class LuigiSwfDecider(swf.Decider):
             wait_total = str(int(wait + 1 * seconds))
             logger.debug('LuigiSwfDecider, retrying %s in %s seconds',
                          task_id, wait_total)
-            timer_name = ('retry-{}'.format(task_id)
-                          .replace('\\', '_')
-                          .replace(':', '_')
-                          .replace('|', '_')
-                          .replace('arn', 'ARN'))[:256]
+            timer_name = retry_timer_name(task_id)
             decisions.start_timer(wait_total, timer_name, task_id)
 
     def _cancel_activities(self, state, decisions):

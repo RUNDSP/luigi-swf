@@ -7,19 +7,15 @@ import boto.swf.layer2 as swf
 from luigi_swf import decider, tasks, util
 
 
-def test_get_task_id():
+def test_retry_timer_name():
     # Setup
-    events = fixture_events()
-    uut = decider.WfState()
-    event_attributes = {
-        'scheduledEventId': 2,
-    }
+    t = 'Task|1'
 
     # Execute
-    actual = uut._get_task_id(events, event_attributes)
+    actual = decider.retry_timer_name(t)
 
     # Test
-    expected = 'Task3'
+    expected = 'retry-{}-Task_1'.format(str(hash(t)))
     assert actual == expected
 
 
@@ -35,25 +31,24 @@ def test_read_wf_state():
     # Test
     assert wf_state.version == 'version1'
     assert wf_state.schedulings == {'Task3': 1, 'Task1': 2}
-    assert wf_state.completed == ['Task3', 'Task6', 'Task7']
+    assert wf_state.completed == set(['Task3', 'Task6', 'Task7'])
     assert wf_state.failures == {'Task1': 1}
     assert wf_state.timeouts == {'Task1': 1}
-    assert wf_state.signaled_retries == {'Task6': 1}
-    assert wf_state.running == []  # TODO: test running count
+    assert wf_state.running == set()  # TODO: test running count
     assert wf_state.wf_cancel_req is False
 
 
-def test_get_wf_cancel_requested():
-    # Setup
-    events = fixture_events_cancel_requested()
-    uut = decider.WfState()
+# def test_get_wf_cancel_requested():
+#     # Setup
+#     events = fixture_events_cancel_requested()
+#     uut = decider.WfState()
 
-    # Execute
-    actual = uut._get_wf_cancel_requested(events)
+#     # Execute
+#     actual = uut._get_wf_cancel_requested(events)
 
-    # Test
-    expected = True
-    assert actual == expected
+#     # Test
+#     expected = True
+#     assert actual == expected
 
 
 def test_get_deps_met():
@@ -197,7 +192,7 @@ def test_wait():
             'startTimerDecisionAttributes': {
                 'control': 'Task1',
                 'startToFireTimeout': '86',
-                'timerId': 'retry-Task1',
+                'timerId': decider.retry_timer_name('Task1'),
             },
         },
     ]
@@ -225,6 +220,14 @@ def fixture_events():
             },
         },
         {
+            'eventId': 2.5,
+            'eventTimestamp': 2.5,
+            'eventType': 'ActivityTaskStarted',
+            'activityTaskStartedEventAttributes': {
+                'scheduledEventId': 2,  # Task3
+            },
+        },
+        {
             'eventId': 3,
             'eventTimestamp': 3.0,
             'eventType': 'ActivityTaskCompleted',
@@ -241,6 +244,14 @@ def fixture_events():
             },
         },
         {
+            'eventId': 4.5,
+            'eventTimestamp': 4.5,
+            'eventType': 'ActivityTaskStarted',
+            'activityTaskStartedEventAttributes': {
+                'scheduledEventId': 4,  # Task1
+            },
+        },
+        {
             'eventId': 5,
             'eventTimestamp': 5.0,
             'eventType': 'ActivityTaskFailed',
@@ -254,6 +265,14 @@ def fixture_events():
             'eventType': 'ActivityTaskScheduled',
             'activityTaskScheduledEventAttributes': {
                 'activityId': 'Task1',
+            },
+        },
+        {
+            'eventId': 6.5,
+            'eventTimestamp': 6.5,
+            'eventType': 'ActivityTaskStarted',
+            'activityTaskStartedEventAttributes': {
+                'scheduledEventId': 6,  # Task1
             },
         },
         {
