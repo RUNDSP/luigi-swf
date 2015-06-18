@@ -310,6 +310,9 @@ class LuigiSwfDecider(swf.Decider):
                 retry_time = state.last_fails[task_id] + \
                     datetime.timedelta(seconds=retry_wait)
                 if retry_wait == 0 or now >= retry_time:
+                    logger.debug('_get_retryables, %s is retryable. '
+                                 'retry_wait=%s, now=%s, retry_time=%s',
+                                 task_id, retry_wait, now, retry_time)
                     retryables.append(task_id)
                 elif task_id not in state.waiting:
                     waitables[task_id] = \
