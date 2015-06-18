@@ -277,7 +277,7 @@ class LuigiSwfDecider(swf.Decider):
 
     def _schedule_retries(self, waitables, decisions):
         for task_id, wait in iteritems(waitables):
-            wait_total = int(wait + 1 * seconds)
+            wait_total = str(int(wait + 1 * seconds))
             logger.debug('LuigiSwfDecider, retrying %s in %s seconds',
                          task_id, wait_total)
             timer_name = ('retry-{}'.format(task_id)
