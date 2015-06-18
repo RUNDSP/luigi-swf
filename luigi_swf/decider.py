@@ -280,9 +280,12 @@ class LuigiSwfDecider(swf.Decider):
             wait_total = int(wait + 1 * seconds)
             logger.debug('LuigiSwfDecider, retrying %s in %s seconds',
                          task_id, wait_total)
-            decisions.start_timer(wait_total,
-                                  'retry-{}'.format(task_id),
-                                  task_id)
+            timer_name = ('retry-{}'.format(task_id)
+                          .replace('\\', '_')
+                          .replace(':', '_')
+                          .replace('|', '_')
+                          .replace('arn', 'ARN'))[:256]
+            decisions.start_timer(wait_total, timer_name, task_id)
 
     def _cancel_activities(self, state, decisions):
         if len(state.running) > 0:
