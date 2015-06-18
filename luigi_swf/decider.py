@@ -316,6 +316,9 @@ class LuigiSwfDecider(swf.Decider):
                         int((retry_time - now).total_seconds())
             else:
                 unretryables.append(task_id)
+        logger.debug('_get_retryables, retryables=%s', repr(retryables))
+        logger.debug('_get_retryables, waitables=%s', repr(waitables))
+        logger.debug('_get_retryables, unretryables=%s', repr(unretryables))
         return retryables, waitables, unretryables
 
     def _get_task_configurations(self, events):
