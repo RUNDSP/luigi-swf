@@ -213,6 +213,36 @@ class WfState(object):
                 break
             self.completed |= set(new_comp)
 
+    def to_json(self):
+        """For debugging
+
+        This could also be used to save state snapshots in SWF markers
+        so we don't need to read all of the pages of history.
+        """
+        return json.dumps({
+            'version': self.version,
+            'schedule_events': self.schedule_events,
+            'running': list(self.running),
+            'completed': list(self.completed),
+            'schedulings': self.schedulings,
+            'failures': self.failures,
+            'last_fails': self.last_fails,
+            'timeouts': self.timeouts,
+            'signaled_retries': self.signaled_retries,
+            'waiting': list(self.waiting),
+            'wf_cancel_req': self.wf_cancel_req,
+            'cancellations': self.cancellations,
+            'cancel_requests': self.cancel_requests,
+            'open_retry_timers': list(self.open_retry_timers),
+        })
+
+    def __str__(self):
+        """
+        This might be big for __str__ but it allows us to defer calling
+        :meth:`to_json` in debug logging.
+        """
+        return self.to_json()
+
 
 class LuigiSwfDecider(swf.Decider):
     """Implementation of boto's SWF Decider
@@ -239,6 +269,7 @@ class LuigiSwfDecider(swf.Decider):
             task_configs = self._get_task_configurations(events)
             state = WfState()
             state.read_wf_state(events, task_configs)
+            logger.debug('LuigiSwfDecider().run(): state was:\n%s', state)
             now = datetime.datetime.utcnow()
             decisions = self._decide(state, task_configs, now)
             self.complete(decisions=decisions)
