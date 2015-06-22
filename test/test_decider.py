@@ -2,8 +2,6 @@ import datetime
 import json
 from pprint import pformat
 
-import boto.swf.layer2 as swf
-
 from luigi_swf import decider, tasks, util
 
 
@@ -96,13 +94,12 @@ def test_decide():
     # Setup
     state = fixture_state()
     task_configs = fixture_task_configs()
-    decisions = swf.Layer1Decisions()
     decider.LuigiSwfDecider.__init__ = lambda s: None
     uut = decider.LuigiSwfDecider()
     now = datetime.datetime.utcfromtimestamp(20.0)
 
     # Execute
-    uut._decide(state, decisions, task_configs, now)
+    decisions = uut._decide(state, task_configs, now)
 
     # Test
     actual = decisions._data
@@ -146,13 +143,12 @@ def test_wait():
     state = fixture_state()
     task_configs = fixture_task_configs()
     task_configs['Task1']['retries'] = tasks.RetryWait(wait=100)
-    decisions = swf.Layer1Decisions()
     decider.LuigiSwfDecider.__init__ = lambda s: None
     uut = decider.LuigiSwfDecider()
     now = datetime.datetime.utcfromtimestamp(20.0)
 
     # Execute
-    uut._decide(state, decisions, task_configs, now)
+    decisions = uut._decide(state, task_configs, now)
 
     # Test
     actual = decisions._data

@@ -231,7 +231,6 @@ class LuigiSwfDecider(swf.Decider):
         :return: None
         """
         decision_task = self.poll(identity=identity)
-        decisions = swf.Layer1Decisions()
         try:
             if 'events' not in decision_task:
                 logger.debug('LuigiSwfDecider().run(), poll timed out')
@@ -241,7 +240,7 @@ class LuigiSwfDecider(swf.Decider):
             state = WfState()
             state.read_wf_state(events, task_configs)
             now = datetime.datetime.utcnow()
-            self._decide(state, decisions, task_configs, now)
+            decisions = self._decide(state, task_configs, now)
             self.complete(decisions=decisions)
         except Exception as error:
             tb = traceback.format_exc()
@@ -249,15 +248,16 @@ class LuigiSwfDecider(swf.Decider):
             details = (tb + '\n' + str(error))[:32767]
             logger.error('LuigiSwfDecider().run(), decider failed:\n%s',
                          details)
+            decisions = swf.Layer1Decisions()
             decisions.fail_workflow_execution(reason=reason, details=details)
             self.complete(decisions=decisions)
             raise
 
-    def _decide(self, state, decisions, task_configs, now):
+    def _decide(self, state, task_configs, now):
         if not state.wf_cancel_req:
-            self._schedule_activities(state, decisions, task_configs, now)
+            return self._schedule_activities(state, task_configs, now)
         else:
-            self._cancel_activities(state, decisions)
+            return self._cancel_activities(state)
 
     def _get_events(self, decision_task):
         # It's paginated.
@@ -269,12 +269,13 @@ class LuigiSwfDecider(swf.Decider):
                 events += decision_task['events']
         return events
 
-    def _schedule_activities(self, state, decisions, task_configs, now):
+    def _schedule_activities(self, state, task_configs, now):
         scheduled = []
         deps_met = self._get_deps_met(state, task_configs)
         running_mutexes = self._get_running_mutexes(state, task_configs)
         retryables, waitables, unretryables = \
             self._get_retryables(state, task_configs, now)
+        decisions = swf.Layer1Decisions()
         self._schedule_retries(waitables, decisions)
         for task_id in deps_met:
             if task_id in unretryables + list(waitables.keys()):
@@ -310,12 +311,16 @@ class LuigiSwfDecider(swf.Decider):
                 msg = 'Task(s) failed: ' + ', '.join(unretryables)
                 logger.error('LuigiSwfDecider().run(), '
                              'failing execution: %s', msg)
+                # Need clean decisions object because we can't combine failure
+                # with other decisions.
+                decisions = swf.Layer1Decisions()
                 decisions.fail_workflow_execution(reason=msg[:255],
                                                   details=msg[:32767])
             else:
                 logger.debug('LuigiSwfDecider().run(), '
                              'completing workflow')
                 decisions.complete_workflow_execution()
+        return decisions
 
     def _schedule_retries(self, waitables, decisions):
         for task_id, wait in iteritems(waitables):
@@ -325,13 +330,15 @@ class LuigiSwfDecider(swf.Decider):
             timer_name = retry_timer_name(task_id)
             decisions.start_timer(wait_total, timer_name, task_id)
 
-    def _cancel_activities(self, state, decisions):
+    def _cancel_activities(self, state):
+        decisions = swf.Layer1Decisions()
         if len(state.running) > 0:
             for task_id in state.running:
                 if task_id not in state.cancel_requests:
                     decisions.request_cancel_activity_task(task_id)
         else:
             decisions.cancel_workflow_executions()
+        return decisions
 
     def _get_deps_met(self, state, task_configs):
         result = []
