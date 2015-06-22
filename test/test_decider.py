@@ -36,6 +36,27 @@ def test_read_wf_state():
     assert wf_state.wf_cancel_req is False
 
 
+def test_read_wf_state_waiting():
+    # Setup
+    events = fixture_events_waiting()
+    task_configs = fixture_task_configs()
+    wf_state = decider.WfState()
+
+    # Execute
+    wf_state.read_wf_state(events, task_configs)
+
+    # Test
+    assert wf_state.version == 'version1'
+    assert wf_state.schedulings == {'Task3': 1, 'Task1': 2}
+    assert wf_state.completed == set(['Task3', 'Task6', 'Task7'])
+    assert wf_state.failures == {'Task1': 1}
+    assert wf_state.timeouts == {'Task1': 1}
+    assert wf_state.waiting == set(['Task1'])
+    timer_id = 'retry-{}-Task1'.format(str(hash('Task1')))
+    assert wf_state.open_retry_timers == set([timer_id])
+    assert wf_state.wf_cancel_req is False
+
+
 # def test_get_wf_cancel_requested():
 #     # Setup
 #     events = fixture_events_cancel_requested()
@@ -297,6 +318,21 @@ def fixture_events_cancel_requested():
             'eventId': 9,
             'eventType': 'WorkflowExecutionCancelRequested',
             'workflowExecutionCancelRequestedEventAttributes': {
+            },
+        },
+    ]
+
+
+def fixture_events_waiting():
+    return fixture_events() + [
+        {
+            'eventId': 9,
+            'eventType': 'TimerStarted',
+            'timerStartedEventAttributes': {
+                'control': 'Task1',
+                'decisionTaskCompletedEventId': 0,
+                'startToFireTimeout': '45',
+                'timerId': 'retry-{}-Task1'.format(str(hash('Task1'))),
             },
         },
     ]
