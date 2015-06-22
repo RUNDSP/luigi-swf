@@ -64,7 +64,7 @@ class WfState(object):
         self.failures = Counter()
         self.last_fails = {}
         self.timeouts = Counter()
-        self.retries = Counter()
+        self.signaled_retries = Counter()
         self.waiting = set()
         self.wf_cancel_req = False
         self.cancellations = Counter()
@@ -185,7 +185,7 @@ class WfState(object):
 
         if e[attrWfSignaled]['signalName'] == 'retry':
             for retry in parse_retries(e[attrWfSignaled]['input']):
-                self.retries[retry] += 1
+                self.signaled_retries[retry] += 1
 
     def handle_wf_cancel_req(self, e):
         self.wf_cancel_req = True
