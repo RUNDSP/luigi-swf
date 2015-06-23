@@ -56,5 +56,6 @@ def configure_logging():
         list(logging.Logger.manager.loggerDict.values())
     return [h.stream
             for l in loggers
+            if not isinstance(l, logging.PlaceHolder)
             for h in l.handlers
             if isinstance(h, logging.FileHandler)]
