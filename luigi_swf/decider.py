@@ -15,14 +15,11 @@ import daemon
 import luigi.configuration
 from six import iteritems
 
-from .tasks import get_task_configurations
-from .util import default_log_format, dthandler, kill_from_pid_file, \
-    SingleWaitingLockPidFile, get_class, dt_from_iso
+from . import tasks, util
 
 
 logger = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=2)
-
 
 attrTaskScheduled = 'activityTaskScheduledEventAttributes'
 attrTaskStarted = 'activityTaskStartedEventAttributes'
@@ -334,7 +331,7 @@ class LuigiSwfDecider(swf.Decider):
                 start_to_close_timeout=str(start_to_close),
                 schedule_to_start_timeout=str(schedule_to_start),
                 schedule_to_close_timeout=str(schedule_to_close),
-                input=json.dumps(inp, default=dthandler))
+                input=json.dumps(inp, default=util.dthandler))
             logger.debug('LuigiSwfDecider().run(), scheduled %s', task_id)
         if all(len(t) == 0 for t in (scheduled, state.running, state.waiting,
                                      waitables.keys())):
@@ -411,17 +408,17 @@ class LuigiSwfDecider(swf.Decider):
         wf_params = wf_input['wf_params']
         logger.debug('get_wf_state_full.get_task_configurations(), '
                      'wf_input:\n%s', pp.pformat(wf_input))
-        wf_cls = get_class(*wf_input['wf_task'])
+        wf_cls = util.get_class(*wf_input['wf_task'])
         kwargs = dict()
         for param_name, param_cls in wf_cls.get_params():
             if param_name == 'pool':
                 continue
             if isinstance(param_cls, luigi.DateParameter):
-                kwargs[param_name] = dt_from_iso(wf_params[param_name])
+                kwargs[param_name] = util.dt_from_iso(wf_params[param_name])
             else:
                 kwargs[param_name] = wf_params[param_name]
         wf_task = wf_cls(**kwargs)
-        return get_task_configurations(wf_task, include_obj=True)
+        return tasks.get_task_configurations(wf_task, include_obj=True)
 
     def _get_running_mutexes(self, state, task_configs):
         return \
@@ -456,8 +453,7 @@ class DeciderServer(object):
     _got_term_signal = False
 
     def __init__(self, identity=None, stdout=None, stderr=None,
-                 logfilename=None, loglevel=logging.INFO,
-                 logformat=default_log_format, **kwargs):
+                 files_preserve=[], **kwargs):
         logger.debug('DeciderServer.__init__(...)')
         config = luigi.configuration.get_config()
         if stdout is None:
@@ -470,16 +466,8 @@ class DeciderServer(object):
             self.stderr = open(stderr_path, 'a')
         else:
             self.stderr = stderr
-        if logfilename is not None:
-            self.logfilename = logfilename
-        else:
-            self.logfilename = config.get('swfscheduler', 'decider-log')
-        self.loglevel = loglevel
-        self.logformat = logformat
-        if 'domain' not in kwargs:
-            kwargs['domain'] = config.get('swfscheduler', 'domain')
-        if 'task_list' not in kwargs:
-            kwargs['task_list'] = 'luigi'
+        kwargs.setdefault('domain', config.get('swfscheduler', 'domain', None))
+        kwargs.setdefault('task_list', 'luigi')
         if 'aws_access_key_id' not in kwargs or \
                 'aws_secret_access_key' not in kwargs:
             access_key = config.get('swfscheduler', 'aws_access_key_id', None)
@@ -489,6 +477,7 @@ class DeciderServer(object):
                 kwargs['aws_access_key_id'] = access_key
                 kwargs['aws_secret_access_key'] = secret_key
         self.identity = identity
+        self.files_preserve = files_preserve
         self.kwargs = kwargs
 
     def pid_file(self):
@@ -525,14 +514,11 @@ class DeciderServer(object):
 
         :return: None
         """
-        logstream = open(self.logfilename, 'a')
-        logging.basicConfig(stream=logstream, level=self.loglevel,
-                            format=self.logformat)
         config = luigi.configuration.get_config()
         waitconf = 'decider-pid-file-wait-sec'
         pid_wait = float(config.get('swfscheduler', waitconf, 10. * seconds))
         context = daemon.DaemonContext(
-            pidfile=SingleWaitingLockPidFile(self.pid_file(), pid_wait),
+            pidfile=util.SingleWaitingLockPidFile(self.pid_file(), pid_wait),
             stdout=self.stdout,
             stderr=self.stderr,
             signal_map={
@@ -540,7 +526,7 @@ class DeciderServer(object):
                 signal.SIGTERM: 'terminate',
                 signal.SIGHUP: 'terminate',
             },
-            files_preserve=[logstream],
+            files_preserve=self.files_preserve,
         )
         with context:
             decider = LuigiSwfDecider(**self.kwargs)
@@ -566,5 +552,5 @@ class DeciderServer(object):
 
         :return: None
         """
-        kill_from_pid_file(self.pid_file() + '-waiting', signal.SIGHUP)
-        kill_from_pid_file(self.pid_file(), signal.SIGWINCH)
+        util.kill_from_pid_file(self.pid_file() + '-waiting', signal.SIGHUP)
+        util.kill_from_pid_file(self.pid_file(), signal.SIGWINCH)

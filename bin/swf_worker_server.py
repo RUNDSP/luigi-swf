@@ -1,17 +1,16 @@
 #!/usr/bin/env python
 
 import argparse
-import logging
 import os
 import re
 from subprocess import call
 
-import luigi.configuration
-
-from luigi_swf.worker import WorkerServer
-
 
 if __name__ == '__main__':
+    from luigi_swf.log import configure_logging
+    files_preserve = configure_logging()
+    import luigi.configuration
+    from luigi_swf.worker import WorkerServer
     parser = argparse.ArgumentParser(description='start/stop SWF worker(s)')
     parser.add_argument('action', choices=['start', 'stop'])
     parser.add_argument('--index', '-i', type=int, default=None)
@@ -19,8 +18,6 @@ if __name__ == '__main__':
     parser.add_argument('--task-list', default=None)
     args = parser.parse_args()
     config = luigi.configuration.get_config()
-    loglevel_name = config.get('logging', 'level')
-    loglevel = getattr(logging, loglevel_name.upper())
     if args.action == 'start':
         if args.index is None:
             # Start all
@@ -34,11 +31,9 @@ if __name__ == '__main__':
                 call(worker_args)
         else:
             # Start one
-            server = WorkerServer(worker_idx=args.index,
-                                  identity=args.identity,
-                                  version='unspecified',
-                                  loglevel=loglevel,
-                                  task_list=args.task_list)
+            server = WorkerServer(
+                worker_idx=args.index, identity=args.identity,
+                version='unspecified', task_list=args.task_list)
             server.start()
     elif args.action == 'stop':
         if args.index is None:
@@ -51,11 +46,10 @@ if __name__ == '__main__':
                     continue
                 worker_idx = pid_match.groups()[0]
                 server = WorkerServer(worker_idx=worker_idx,
-                                      version='unspecified',
-                                      loglevel=loglevel)
+                                      version='unspecified')
                 server.stop()
         else:
             # Stop one
-            server = WorkerServer(worker_idx=args.index, version='unspecified',
-                                  loglevel=loglevel)
+            server = WorkerServer(worker_idx=args.index,
+                                  version='unspecified')
             server.stop()

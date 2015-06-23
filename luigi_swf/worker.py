@@ -12,8 +12,7 @@ import daemon
 import luigi
 import luigi.configuration
 
-from .util import default_log_format, get_class, kill_from_pid_file, \
-    SingleWaitingLockPidFile, dt_from_iso
+from . import util
 
 
 logger = logging.getLogger(__name__)
@@ -48,14 +47,15 @@ class LuigiSwfWorker(swf.ActivityWorker):
                         activity_task['activityId'])
             input_task = json.loads(activity_task.get('input'))
             input_params = json.loads(input_task['params'])
-            task_cls = get_class(*input_task['class'])
+            task_cls = util.get_class(*input_task['class'])
             task_params = task_cls.get_params()
             kwargs = dict()
             for param_name, param_cls in task_params:
                 if param_name == 'pool':
                     continue
                 if isinstance(param_cls, luigi.DateParameter):
-                    kwargs[param_name] = dt_from_iso(input_params[param_name])
+                    kwargs[param_name] = util.dt_from_iso(
+                        input_params[param_name])
                 else:
                     kwargs[param_name] = input_params[param_name]
             task = task_cls(**kwargs)
@@ -113,23 +113,13 @@ class WorkerServer(object):
     :type stdout: stream (such as the return value of :func:`open`)
     :param stderr: stream to which stderr will be written
     :type stderr: stream (such as the return value of :func:`open`)
-    :param logfilename: file path to which the application log will be written
-    :type logfilename: str
-    :param loglevel: log level
-    :type loglevel: log level constant from the :mod:`logging` module
-                    (``logging.DEBUG``, ``logging.INFO``, ``logging.ERROR``,
-                    etc.)
-    :param logformat: format string of log output lines, as in the
-                      :mod:`logging` module
-    :type logformat: str
     :return: None
     """
 
     _got_term_signal = False
 
     def __init__(self, worker_idx, identity=None, stdout=None, stderr=None,
-                 logfilename=None, loglevel=logging.INFO,
-                 logformat=default_log_format, **kwargs):
+                 files_preserve=[], **kwargs):
         self.worker_idx = worker_idx
         config = luigi.configuration.get_config()
         if stdout is None:
@@ -142,13 +132,6 @@ class WorkerServer(object):
             self.stderr = open(stderr_path + '-' + str(worker_idx), 'a')
         else:
             self.stderr = stderr
-        if logfilename is not None:
-            self.logfilename = logfilename + '-' + str(worker_idx)
-        else:
-            self.logfilename = config.get('swfscheduler', 'worker-log') + \
-                '-' + str(worker_idx)
-        self.loglevel = loglevel
-        self.logformat = logformat
         if 'domain' not in kwargs:
             kwargs['domain'] = config.get('swfscheduler', 'domain')
         if 'task_list' not in kwargs:
@@ -172,6 +155,7 @@ class WorkerServer(object):
                 self.identity = str(identity)
             else:
                 self.identity = None
+        self.files_preserve = files_preserve
         self.kwargs = kwargs
 
     def pid_file(self):
@@ -209,14 +193,11 @@ class WorkerServer(object):
 
         :return: None
         """
-        logstream = open(self.logfilename, 'a')
-        logging.basicConfig(stream=logstream, level=self.loglevel,
-                            format=self.logformat)
         config = luigi.configuration.get_config()
         waitconf = 'worker-pid-file-wait-sec'
         pid_wait = float(config.get('swfscheduler', waitconf, 10. * seconds))
         context = daemon.DaemonContext(
-            pidfile=SingleWaitingLockPidFile(self.pid_file(), pid_wait),
+            pidfile=util.SingleWaitingLockPidFile(self.pid_file(), pid_wait),
             stdout=self.stdout,
             stderr=self.stderr,
             signal_map={
@@ -224,7 +205,7 @@ class WorkerServer(object):
                 signal.SIGTERM: 'terminate',
                 signal.SIGHUP: 'terminate',
             },
-            files_preserve=[logstream],
+            files_preserve=self.files_preserve,
         )
         with context:
             worker = LuigiSwfWorker(**self.kwargs)
@@ -249,5 +230,5 @@ class WorkerServer(object):
 
         :return: None
         """
-        kill_from_pid_file(self.pid_file() + '-waiting', signal.SIGHUP)
-        kill_from_pid_file(self.pid_file(), signal.SIGWINCH)
+        util.kill_from_pid_file(self.pid_file() + '-waiting', signal.SIGHUP)
+        util.kill_from_pid_file(self.pid_file(), signal.SIGWINCH)

@@ -124,11 +124,6 @@ def get_luigi_params(task):
     return result
 
 
-# It would be nice to read this from a config file, but ConfigParser doesn't
-# allow escaping of percent signs in any reasonable way.
-default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
-
-
 def dt_from_iso(iso):
     return datetime.date(*map(int, iso.split('-')))
 

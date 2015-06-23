@@ -9,8 +9,7 @@ import luigi
 import luigi.configuration
 from six import iteritems, print_
 
-from .tasks import get_task_configurations
-from .util import fullname, get_luigi_params, dthandler
+from . import tasks, util
 
 
 logger = logging.getLogger(__name__)
@@ -79,11 +78,11 @@ class LuigiSwfExecutor(object):
         consider calling this method only when necessary because it can
         contribute to an SWF API throttling issue.
         """
-        tasks = get_task_configurations(self.workflow_task)
+        ts = tasks.get_task_configurations(self.workflow_task)
         registerables = []
         registerables.append(swf.Domain(name=self.domain))
         task_dats = set((t['task_family'], t['task_list'])
-                        for (t_id, t) in iteritems(tasks))
+                        for (t_id, t) in iteritems(ts))
         for task_dat in task_dats:
             registerables.append(swf.ActivityType(domain=self.domain,
                                                   version=self.version,
@@ -110,9 +109,9 @@ class LuigiSwfExecutor(object):
         """
         wf_id = self.workflow_task.task_id
         wf_input = json.dumps({
-            'wf_task': fullname(self.workflow_task),
-            'wf_params': get_luigi_params(self.workflow_task),
-        }, default=dthandler)
+            'wf_task': util.fullname(self.workflow_task),
+            'wf_params': util.get_luigi_params(self.workflow_task),
+        }, default=util.dthandler)
         wf_type = swf.WorkflowType(domain=self.domain,
                                    version=self.version,
                                    name=self.workflow_task.task_family,
