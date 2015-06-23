@@ -39,7 +39,7 @@ if __name__ == '__main__':
         if args.index is None:
             # Stop all
             pid_dir = config.get('swfscheduler', 'worker-pid-file-dir')
-            re_pid = re.compile(r'^swfworker\-([0-9]+)\.pid(\-waiting)?$')
+            re_pid = re.compile(r'^swfworker\-(.+)\.pid(\-waiting)?$')
             for pid_file in os.listdir(pid_dir):
                 pid_match = re_pid.match(pid_file)
                 if pid_match is None:

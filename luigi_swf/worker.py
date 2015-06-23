@@ -4,6 +4,7 @@ import os
 import os.path
 import signal
 from subprocess import call
+import sys
 from time import sleep
 import traceback
 
@@ -107,8 +108,8 @@ class WorkerServer(object):
     shut this down lazily (after processing the current activity task or
     60-second poll) because ``SIGTERM`` kills child processes.
 
-    :param worker_idx: worker index (instance number)
-    :type worker_idx: int
+    :param identity: worker SWF identity
+    :type identity: str
     :param stdout: stream to which stdout will be written
     :type stdout: stream (such as the return value of :func:`open`)
     :param stderr: stream to which stderr will be written
@@ -118,20 +119,11 @@ class WorkerServer(object):
 
     _got_term_signal = False
 
-    def __init__(self, worker_idx, identity=None, stdout=None, stderr=None,
+    def __init__(self, identity, stdout=sys.stdout, stderr=sys.stderr,
                  files_preserve=[], **kwargs):
-        self.worker_idx = worker_idx
         config = luigi.configuration.get_config()
-        if stdout is None:
-            stdout_path = config.get('swfscheduler', 'worker-log-out')
-            self.stdout = open(stdout_path + '-' + str(worker_idx), 'a')
-        else:
-            self.stdout = stdout
-        if stderr is None:
-            stderr_path = config.get('swfscheduler', 'worker-log-err')
-            self.stderr = open(stderr_path + '-' + str(worker_idx), 'a')
-        else:
-            self.stderr = stderr
+        self.stdout = stdout
+        self.stderr = stderr
         if 'domain' not in kwargs:
             kwargs['domain'] = config.get('swfscheduler', 'domain')
         if 'task_list' not in kwargs:
@@ -142,19 +134,11 @@ class WorkerServer(object):
             access_key = config.get('swfscheduler', 'aws_access_key_id', None)
             secret_key = config.get('swfscheduler', 'aws_secret_access_key',
                                     None)
-            if access_key is not None and secret_key is not None:
+            if access_key is not None and secret_key is not None and \
+                    access_key != '' and secret_key != '':
                 kwargs['aws_access_key_id'] = access_key
                 kwargs['aws_secret_access_key'] = secret_key
-        if worker_idx is not None:
-            if identity is not None:
-                self.identity = '{0}-{1}'.format(identity, worker_idx)
-            else:
-                self.identity = str(worker_idx)
-        else:
-            if identity is not None:
-                self.identity = str(identity)
-            else:
-                self.identity = None
+        self.identity = str(identity)
         self.files_preserve = files_preserve
         self.kwargs = kwargs
 
@@ -170,7 +154,7 @@ class WorkerServer(object):
         config = luigi.configuration.get_config()
         pid_dir = config.get('swfscheduler', 'worker-pid-file-dir')
         call(['mkdir', '-p', pid_dir])
-        pidfile = 'swfworker-{0}.pid'.format(self.worker_idx)
+        pidfile = 'swfworker-{}.pid'.format(self.identity)
         return os.path.join(pid_dir, pidfile)
 
     def _handle_term(self, s, f):
@@ -180,7 +164,7 @@ class WorkerServer(object):
     def start(self):
         """Start the worker daemon and exit
 
-        If there is already a worker daemon running with this index, this
+        If there is already a worker daemon running with this identity, this
         process will wait for that process to unlock its PID file before taking
         over. If there is already another process waiting to take over, the new
         one will send a ``SIGHUP`` to the old waiting process. This will not

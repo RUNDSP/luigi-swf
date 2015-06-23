@@ -452,7 +452,7 @@ class DeciderServer(object):
 
     _got_term_signal = False
 
-    def __init__(self, identity=None, stdout=None, stderr=None,
+    def __init__(self, identity, stdout=None, stderr=None,
                  files_preserve=[], **kwargs):
         logger.debug('DeciderServer.__init__(...)')
         config = luigi.configuration.get_config()
@@ -492,7 +492,7 @@ class DeciderServer(object):
         config = luigi.configuration.get_config()
         pid_dir = config.get('swfscheduler', 'decider-pid-file-dir')
         call(['mkdir', '-p', pid_dir])
-        return os.path.join(pid_dir, 'swfdecider.pid')
+        return os.path.join(pid_dir, 'swfdecider-{}.pid'.format(self.identity))
 
     def _handle_term(self, s, f):
         logger.debug('DeciderServer()._handle_term()')
