@@ -28,8 +28,8 @@ if __name__ == '__main__':
                 pid_match = re_pid.match(pid_file)
                 if pid_match is None:
                     continue
-                worker_idx = pid_match.groups()[0]
-                server = DeciderServer(worker_idx=worker_idx,
+                identity = pid_match.groups()[0]
+                server = DeciderServer(identity=identity,
                                        version='unspecified')
                 server.stop()
         else:
