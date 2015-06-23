@@ -16,15 +16,15 @@ default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 def configure_logging():
     """
-    If the `LOGCONFIG` env. variable is set to the location of a YAML file
+    If the ``LOGCONFIG`` env. variable is set to the location of a YAML file
     describing a Python logging dict config, that will be used. Otherwise,
-    `LOGFILE` must be set to a log file location to be
+    ``LOGFILE`` must be set to a log file location to be
     passed to :meth:`logging.basicConfig`, optionally with a value for
-    `LOGLEVEL` (defaults to "WARN").
+    ``LOGLEVEL`` (defaults to "WARN").
 
     :return: list of file handles which need to be kept open (objects with a
-             `fileno` method). The python-daemon package closes file handles
-             that you don't pass in through `files_preserve`.
+             ``fileno`` method). The python-daemon package closes file handles
+             that you don't pass in through ``files_preserve``.
     """
     def pathex_constructor(loader, node):
         """For substituting environment variables into the YAML log config"""
