@@ -167,7 +167,7 @@ class LuigiSwfDecider(swf.Decider):
             task_configs = self._get_task_configurations(events)
             state = WfState()
             state.read_wf_state(events, task_configs)
-            self._decide()
+            self._decide(state, decisions, task_configs)
             self.complete(decisions=decisions)
         except Exception as error:
             tb = traceback.format_exc()
