@@ -1,7 +1,7 @@
 luigi-swf
 =========
 
-[![Circle CI](https://circleci.com/gh/RUNDSP/luigi-swf.svg?style=svg)](https://circleci.com/gh/RUNDSP/luigi-swf)
+[![Circle CI](https://circleci.com/gh/RUNDSP/luigi-swf.svg?style=svg)](https://circleci.com/gh/RUNDSP/luigi-swf) [![Documentation Status](https://readthedocs.org/projects/luigi-swf/badge/?version=stable)](https://readthedocs.org/projects/luigi-swf/?badge=stable)
 
 [Spotify's Luigi](https://github.com/spotify/luigi) + [Amazon's Simple Workflow Service (SWF)](http://aws.amazon.com/swf/) integration
 
@@ -56,8 +56,7 @@ workers).
 
 ## Documentation
 
-We don't have documentation yet. See the docstrings or build the API docs
-with Sphinx.
+[luigi-swf.readthedocs.org](http://luigi-swf.readthedocs.org/)
 
 ## Installation
 
