@@ -7,7 +7,7 @@ from boto.swf.exceptions import SWFTypeAlreadyExistsError, \
     SWFDomainAlreadyExistsError
 import luigi
 import luigi.configuration
-from six import iteritems, print_
+from six import iteritems, print_, string_types, text_type
 
 from .util import fullname, get_task_configurations, get_luigi_params, \
     dthandler
@@ -113,12 +113,16 @@ class LuigiSwfExecutor(object):
             'wf_task': fullname(self.workflow_task),
             'wf_params': get_luigi_params(self.workflow_task),
         }, default=dthandler)
-        wf_type = swf.WorkflowType(domain=self.domain,
-                                   version=self.version,
-                                   name=self.workflow_task.task_family,
-                                   task_list='luigi')
-        timeout = getattr(self.workflow_task, 'swf_wf_start_to_close_timeout')
-        timeout = str(int(timeout))
+        wf_type = swf.WorkflowType(
+            domain=self.domain, version=self.version,
+            name=self.workflow_task.task_family, task_list='luigi')
+        timeout = getattr(
+            self.workflow_task, 'swf_wf_start_to_close_timeout', None)
+        if timeout is None:
+            timeout = 'NONE'
+        if not isinstance(timeout, string_types) and \
+                not isinstance(timeout, text_type):
+            timeout = str(int(timeout))
         logger.info('LuigiSwfExecutor().execute(), executing workflow %s',
                     wf_id)
         execution = wf_type.start(workflow_id=wf_id, input=wf_input,

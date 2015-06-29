@@ -54,9 +54,6 @@ class DemoBasicWorkflow(luigi.WrapperTask):
     dt = luigi.DateParameter()
     hour = luigi.IntParameter()
 
-    # Default values
-    swf_wf_start_to_close_timeout = 15 * minutes  # in seconds
-
     def requires(self):
         return DemoBasicTask(dt=self.dt, hour=self.hour)
 
