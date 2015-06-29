@@ -15,6 +15,10 @@ from .util import fullname, get_task_configurations, get_luigi_params, \
 
 logger = logging.getLogger(__name__)
 pp = pprint.PrettyPrinter(indent=2)
+seconds = 1
+minutes = 60 * seconds
+hours = 60 * minutes
+days = 24 * hours
 
 
 class LuigiSwfExecutor(object):
@@ -119,7 +123,7 @@ class LuigiSwfExecutor(object):
         timeout = getattr(
             self.workflow_task, 'swf_wf_start_to_close_timeout', None)
         if timeout is None:
-            timeout = 'NONE'
+            timeout = 365 * days
         if not isinstance(timeout, string_types) and \
                 not isinstance(timeout, text_type):
             timeout = str(int(timeout))
