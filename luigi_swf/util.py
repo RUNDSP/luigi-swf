@@ -130,7 +130,9 @@ def get_luigi_params(task):
 default_log_format = '%(asctime)s - %(levelname)s - %(name)s - %(message)s'
 
 
-def get_task_configurations(task, include_obj=False):
+def get_task_configurations(task, wf_run_id=None, include_obj=False):
+    if wf_run_id is not None:
+        setattr(task, 'swf_wf_run_id', wf_run_id)
     deps = task.deps()
     start_to_close = getattr(task, 'swf_start_to_close_timeout', None)
     if start_to_close is None:
@@ -167,7 +169,7 @@ def get_task_configurations(task, include_obj=False):
     if include_obj:
         tasks[task.task_id]['task'] = task
     for dep in deps:
-        tasks.update(get_task_configurations(dep))
+        tasks.update(get_task_configurations(dep, wf_run_id, include_obj))
     return tasks
 
 
