@@ -47,6 +47,13 @@ planner scheduler, error tracebacks are displayed in SWF's interface.
 Additionally, the SWF interface provides buttons for cancelling and retrying
 workflow executions.
 
+### Compatible with plain Luigi
+
+You don't need to change your plain-Luigi workflows to run them on SWF
+(assuming you have task workers polling on activity list 'default'). Likewise,
+the changes you make to your Luigi tasks to make use of the above features
+won't affect how your workflows run in the regular Luigi scheduler.
+
 ## Examples
 
 See `./luigi_swf/examples/` for example tasks that make use of SWF's features

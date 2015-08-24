@@ -164,7 +164,8 @@ class LuigiSwfDecider(swf.Decider):
                 logger.debug('LuigiSwfDecider().run(), poll timed out')
                 return
             events = self._get_events(decision_task)
-            task_configs = self._get_task_configurations(events)
+            task_configs = self._get_task_configurations(
+                events, decision_task['workflowExecution']['runId'])
             state = WfState()
             state.read_wf_state(events, task_configs)
             self._decide(state, decisions, task_configs)
@@ -264,7 +265,7 @@ class LuigiSwfDecider(swf.Decider):
                 result.append(task_id)
         return result
 
-    def _get_task_configurations(self, events):
+    def _get_task_configurations(self, events, wf_run_id):
         wf_event = next(e for e in events
                         if e['eventType'] == 'WorkflowExecutionStarted')
         wf_event_attr = wf_event['workflowExecutionStartedEventAttributes']
@@ -282,7 +283,7 @@ class LuigiSwfDecider(swf.Decider):
             else:
                 kwargs[param_name] = wf_params[param_name]
         wf_task = wf_cls(**kwargs)
-        return get_task_configurations(wf_task, include_obj=True)
+        return get_task_configurations(wf_task, wf_run_id, include_obj=True)
 
     def _get_running_mutexes(self, state, task_configs):
         return \

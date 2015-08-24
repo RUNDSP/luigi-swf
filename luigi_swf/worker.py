@@ -61,6 +61,8 @@ class LuigiSwfWorker(swf.ActivityWorker):
             task = task_cls(**kwargs)
             if hasattr(task, 'register_activity_worker'):
                 task.register_activity_worker(self, activity_task)
+            setattr(task, 'swf_wf_run_id',
+                    activity_task['workflowExecution']['runId'])
             if task.complete():
                 result = 'Did not run (task.complete() returned true)'
                 logger.debug('LuigiSwfWorker().run(), %s, %s', result)
