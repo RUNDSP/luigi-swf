@@ -10,7 +10,7 @@ setup(
         'boto>=2.28.0',
         'luigi>=1.0.16',
         'pidfile>=0.1.0',
-        'python-daemon>=1.6.1',
+        'python-daemon==2.0.6',
         'six>=1.6.1',
     ],
     author='Mike Placentra',
